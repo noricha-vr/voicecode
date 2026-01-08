@@ -158,19 +158,20 @@ class VoiceCodeApp(rumps.App):
         )
 
     def _start_keyboard_listener(self) -> None:
-        """キーボードリスナーを別スレッドで起動する。"""
-        listener = keyboard.Listener(
+        """キーボードリスナーを起動する。"""
+        self._listener = keyboard.Listener(
             on_press=self._on_press,
             on_release=self._on_release,
         )
-        listener_thread = threading.Thread(target=listener.start, daemon=True)
-        listener_thread.start()
-        # リスナーを保持しておく（停止時に必要な場合のため）
-        self._listener = listener
+        # Listener.start() は自身をデーモンスレッドとして起動する
+        self._listener.start()
 
         # タイムアウトチェック用タイマーを起動
         self._timeout_timer = rumps.Timer(self._check_timeout, 0.5)
         self._timeout_timer.start()
+
+        hotkey_display = self._format_hotkey_display()
+        print(f"[Info] Keyboard listener started. Hotkey: {hotkey_display}")
 
     def _check_timeout(self, _) -> None:
         """録音タイムアウトをチェックする。"""
