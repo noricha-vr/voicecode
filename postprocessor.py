@@ -215,7 +215,7 @@ class PostProcessor:
     Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
     """
 
-    MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
+    MODEL = "google/gemini-2.5-flash-lite"
 
     def __init__(self, api_key: str | None = None):
         """PostProcessorを初期化する。
