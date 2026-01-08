@@ -249,9 +249,10 @@ class PostProcessor:
         message = self._client.messages.create(
             model=self.MODEL,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
             messages=[
-                {"role": "user", "content": text}
+                {"role": "user", "content": text},
+                {"role": "assistant", "content": "解析中"},
+                {"role": "user", "content": SYSTEM_PROMPT},
             ],
         )
 

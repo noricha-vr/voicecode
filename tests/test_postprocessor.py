@@ -62,8 +62,12 @@ class TestPostProcessor:
         # 呼び出し引数を検証
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["model"] == "claude-3-5-haiku-latest"
-        assert call_kwargs["system"] == SYSTEM_PROMPT
-        assert call_kwargs["messages"] == [{"role": "user", "content": "リアクト"}]
+        assert "system" not in call_kwargs  # systemパラメータは使用しない
+        assert call_kwargs["messages"] == [
+            {"role": "user", "content": "リアクト"},
+            {"role": "assistant", "content": "解析中"},
+            {"role": "user", "content": SYSTEM_PROMPT},
+        ]
 
     @patch("postprocessor.anthropic.Anthropic")
     def test_process_strips_result(self, mock_anthropic_class):
@@ -86,13 +90,15 @@ class TestPostProcessor:
 
     def test_system_prompt_contains_conversion_examples(self):
         """システムプロンプトに変換例が含まれていること。"""
-        assert "リアクト→React" in SYSTEM_PROMPT
-        assert "タイプスクリプト→TypeScript" in SYSTEM_PROMPT
-        assert "ユースステート→useState" in SYSTEM_PROMPT
+        # terminologyセクションに用語変換定義が含まれていること
+        assert 'japanese="リアクト" english="React"' in SYSTEM_PROMPT
+        assert 'japanese="タイプスクリプト" english="TypeScript"' in SYSTEM_PROMPT
+        assert 'japanese="ユースステート" english="useState"' in SYSTEM_PROMPT
 
     def test_system_prompt_prevents_translation(self):
         """システムプロンプトに日本語維持ルールが含まれていること。"""
-        assert "日本語の文章はそのまま維持する" in SYSTEM_PROMPT
+        # 日本語維持ルールが含まれていること
+        assert "日本語維持" in SYSTEM_PROMPT
         assert "英語に翻訳しない" in SYSTEM_PROMPT
 
     def test_system_prompt_contains_examples(self):
@@ -104,6 +110,7 @@ class TestPostProcessor:
 
     def test_system_prompt_contains_additional_terms(self):
         """システムプロンプトに追加の変換例が含まれていること。"""
-        assert "ユースエフェクト→useEffect" in SYSTEM_PROMPT
-        assert "クロード→Claude" in SYSTEM_PROMPT
-        assert "ジーピーティー→GPT" in SYSTEM_PROMPT
+        # terminologyセクションに追加用語が含まれていること
+        assert 'japanese="ユースエフェクト" english="useEffect"' in SYSTEM_PROMPT
+        assert 'japanese="クロード" english="Claude"' in SYSTEM_PROMPT
+        assert 'japanese="ジーピーティー" english="GPT"' in SYSTEM_PROMPT
