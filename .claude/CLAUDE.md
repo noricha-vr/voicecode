@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|-----|
 | Python | 3.13 |
 | パッケージ管理 | uv |
-| ホットキー | Ctrl+Shift+R |
+| ホットキー | F13（.envで変更可能） |
 | 文字起こし | Groq Whisper (whisper-large-v3-turbo) |
 | 後処理 | Claude 3.5 Haiku |
 
@@ -33,6 +33,15 @@ uv run pytest tests/test_postprocessor.py
 
 # 特定テスト実行
 uv run pytest tests/test_postprocessor.py::TestPostProcessor::test_process_success -v
+
+# サービス開始
+launchctl load ~/Library/LaunchAgents/com.voicecode.plist
+
+# サービス停止
+launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
+
+# ログ確認
+tail -f /tmp/voicecode.log
 ```
 
 ## 環境変数

@@ -4,7 +4,7 @@ macOS用の音声入力ツール。ホットキー1回で音声入力から文�
 
 ## 特徴
 
-- **ワンキー操作**: Ctrl+Shift+R で録音開始/停止をトグル
+- **ワンキー操作**: F13（カスタマイズ可能）で録音開始/停止をトグル
 - **高速文字起こし**: Groq Whisper (whisper-large-v3-turbo) による高精度な音声認識
 - **プログラミング用語の自動補正**: Claude Haiku でカタカナを英語表記に変換
 - **シームレスな入力**: 自動でクリップボードにコピー&貼り付け
@@ -16,8 +16,12 @@ macOS用の音声入力ツール。ホットキー1回で音声入力から文�
 cp .env.example .env
 # .env を編集して API キーを設定
 
-# 実行
+# 手動実行
 uv run python main.py
+
+# バックグラウンドサービスとして常駐（オプション）
+cp com.voicecode.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.voicecode.plist
 ```
 
 ## セットアップ詳細
@@ -39,6 +43,7 @@ cp .env.example .env
 ```bash
 GROQ_API_KEY=your_groq_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
+HOTKEY=f13  # ホットキー（デフォルト: f13、例: ctrl+shift+r）
 ```
 
 ### 3. macOS 権限の設定
@@ -57,12 +62,36 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 uv run python main.py
 ```
 
-1. **録音開始**: Ctrl+Shift+R を押す
+1. **録音開始**: F13 を押す（デフォルト、`.env` の `HOTKEY` で変更可能）
 2. **話す**: マイクに向かって話す
-3. **録音停止**: Ctrl+Shift+R を再度押す
+3. **録音停止**: F13 を再度押す
 4. **自動処理**: 文字起こし → 後処理 → 貼り付けが実行される
 
 終了するには Ctrl+C を押す。
+
+## バックグラウンドサービスとして実行
+
+Mac起動時に自動でvoicecodeを常駐させる場合:
+
+### 1. plistをコピー
+```bash
+cp com.voicecode.plist ~/Library/LaunchAgents/
+```
+
+### 2. サービスを開始
+```bash
+launchctl load ~/Library/LaunchAgents/com.voicecode.plist
+```
+
+### 3. サービスを停止
+```bash
+launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
+```
+
+### ログ確認
+```bash
+tail -f /tmp/voicecode.log
+```
 
 ## 変換例
 

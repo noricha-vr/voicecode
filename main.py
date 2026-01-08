@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """音声入力ツールのエントリポイント。
 
-Ctrl+Shift+R で録音開始/停止をトグル。
+設定されたホットキー（デフォルト: F13）で録音開始/停止をトグル。
 録音停止後、文字起こし→LLM後処理→クリップボードにコピー→貼り付けを実行。
 """
 
@@ -20,15 +20,106 @@ from recorder import AudioRecorder
 from transcriber import Transcriber
 
 
+def _parse_hotkey(hotkey_str: str) -> set[keyboard.Key | keyboard.KeyCode]:
+    """環境変数文字列をパースしてキーセットに変換する。
+
+    Args:
+        hotkey_str: ホットキー文字列（例: "f13", "ctrl+shift+r"）
+
+    Returns:
+        pynputキーオブジェクトのセット
+
+    Raises:
+        ValueError: 無効なキー文字列の場合
+    """
+    modifier_map: dict[str, keyboard.Key] = {
+        "ctrl": keyboard.Key.ctrl,
+        "shift": keyboard.Key.shift,
+        "alt": keyboard.Key.alt,
+        "cmd": keyboard.Key.cmd,
+    }
+
+    keys: set[keyboard.Key | keyboard.KeyCode] = set()
+    parts = hotkey_str.lower().strip().split("+")
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+
+        # 修飾キーをチェック
+        if part in modifier_map:
+            keys.add(modifier_map[part])
+            continue
+
+        # ファンクションキーをチェック (f1-f20)
+        if part.startswith("f") and part[1:].isdigit():
+            fn_num = int(part[1:])
+            if 1 <= fn_num <= 20:
+                fn_key = getattr(keyboard.Key, part, None)
+                if fn_key:
+                    keys.add(fn_key)
+                    continue
+            raise ValueError(f"Invalid function key: {part}")
+
+        # 単一文字キー
+        if len(part) == 1:
+            keys.add(keyboard.KeyCode.from_char(part))
+            continue
+
+        raise ValueError(f"Unknown key: {part}")
+
+    if not keys:
+        raise ValueError(f"No valid keys found in: {hotkey_str}")
+
+    return keys
+
+
+def _format_hotkey(keys: set[keyboard.Key | keyboard.KeyCode]) -> str:
+    """キーセットを人間可読な文字列に変換する。
+
+    Args:
+        keys: pynputキーオブジェクトのセット
+
+    Returns:
+        人間可読なホットキー文字列（例: "Ctrl+Shift+R"）
+    """
+    key_names: list[str] = []
+
+    # 修飾キーを先に処理（順序を一定にするため）
+    modifier_order = [
+        (keyboard.Key.ctrl, "Ctrl"),
+        (keyboard.Key.shift, "Shift"),
+        (keyboard.Key.alt, "Alt"),
+        (keyboard.Key.cmd, "Cmd"),
+    ]
+
+    for key_obj, name in modifier_order:
+        if key_obj in keys:
+            key_names.append(name)
+
+    # その他のキー
+    for key in keys:
+        if isinstance(key, keyboard.Key):
+            if key in (keyboard.Key.ctrl, keyboard.Key.shift, keyboard.Key.alt, keyboard.Key.cmd):
+                continue  # 既に処理済み
+            # ファンクションキーなど
+            key_names.append(key.name.upper())
+        elif isinstance(key, keyboard.KeyCode):
+            if key.char:
+                key_names.append(key.char.upper())
+
+    return "+".join(key_names)
+
+
 class VoiceInputTool:
     """音声入力ツールのメインクラス。"""
-
-    HOTKEY = {keyboard.Key.ctrl, keyboard.Key.shift, keyboard.KeyCode.from_char("r")}
 
     def __init__(self):
         """VoiceInputToolを初期化する。"""
         load_dotenv()
 
+        self._hotkey = _parse_hotkey(os.getenv("HOTKEY", "f13"))
         self._recorder = AudioRecorder()
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
@@ -57,7 +148,11 @@ class VoiceInputTool:
 
     def _check_hotkey(self) -> bool:
         """ホットキーが押されているかチェックする。"""
-        return self.HOTKEY <= self._current_keys
+        return self._hotkey <= self._current_keys
+
+    def _format_hotkey_display(self) -> str:
+        """ホットキーを表示用に整形する。"""
+        return _format_hotkey(self._hotkey)
 
     def _toggle_recording(self) -> None:
         """録音のトグル処理。"""
@@ -73,8 +168,9 @@ class VoiceInputTool:
         """録音を開始する。"""
         try:
             self._recorder.start()
+            hotkey_display = self._format_hotkey_display()
             print("\n" + "=" * 50)
-            print("Recording... Press Ctrl+Shift+R to stop")
+            print(f"Recording... Press {hotkey_display} to stop")
             print("=" * 50)
         except Exception as e:
             print(f"[Error] Failed to start recording: {e}")
@@ -111,8 +207,9 @@ class VoiceInputTool:
             pyautogui.hotkey("command", "v")
             print("[Paste] Done!")
 
+            hotkey_display = self._format_hotkey_display()
             print("\n" + "=" * 50)
-            print("Ready. Press Ctrl+Shift+R to start recording")
+            print(f"Ready. Press {hotkey_display} to start recording")
             print("=" * 50)
 
         except Exception as e:
@@ -131,10 +228,11 @@ class VoiceInputTool:
 
     def run(self) -> None:
         """ツールを実行する。"""
+        hotkey_display = self._format_hotkey_display()
         print("\n" + "=" * 50)
         print("Voice Input Tool")
         print("=" * 50)
-        print("Hotkey: Ctrl+Shift+R (toggle recording)")
+        print(f"Hotkey: {hotkey_display} (toggle recording)")
         print("Press Ctrl+C to exit")
         print("=" * 50 + "\n")
 
