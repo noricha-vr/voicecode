@@ -3,8 +3,8 @@
 マイクから音声をキャプチャし、一時ファイルに保存する。
 """
 
-import io
 import tempfile
+import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,11 +15,19 @@ import sounddevice as sd
 
 @dataclass
 class RecordingConfig:
-    """録音設定。"""
+    """録音設定。
+
+    Attributes:
+        sample_rate: サンプリングレート（Hz）。
+        channels: チャンネル数。
+        dtype: 音声データの型。
+        max_duration: 最大録音時間（秒）。
+    """
 
     sample_rate: int = 16000
     channels: int = 1
     dtype: str = "int16"
+    max_duration: int = 60
 
 
 class AudioRecorder:
@@ -38,11 +46,19 @@ class AudioRecorder:
         self._frames: list[np.ndarray] = []
         self._is_recording = False
         self._stream: sd.InputStream | None = None
+        self._start_time: float | None = None
+        self._max_duration: int = self.config.max_duration
+        self._timeout_reached: bool = False
 
     @property
     def is_recording(self) -> bool:
         """録音中かどうかを返す。"""
         return self._is_recording
+
+    @property
+    def is_timeout(self) -> bool:
+        """タイムアウトで録音が停止したかどうかを返す。"""
+        return self._timeout_reached
 
     def start(self) -> None:
         """録音を開始する。
@@ -55,10 +71,22 @@ class AudioRecorder:
 
         self._frames = []
         self._is_recording = True
+        self._start_time = time.time()
+        self._timeout_reached = False
 
-        def callback(indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags) -> None:
+        def callback(
+            indata: np.ndarray, frames: int, time_info: dict, status: sd.CallbackFlags
+        ) -> None:
             if status:
                 print(f"Recording status: {status}")
+
+            # タイムアウトチェック
+            if self._start_time is not None:
+                elapsed = time.time() - self._start_time
+                if elapsed >= self._max_duration:
+                    self._timeout_reached = True
+                    raise sd.CallbackAbort()
+
             self._frames.append(indata.copy())
 
         self._stream = sd.InputStream(

@@ -1,9 +1,12 @@
 """main.pyのホットキー関連機能のテスト。"""
 
+import subprocess
+from unittest.mock import MagicMock, patch
+
 import pytest
 from pynput import keyboard
 
-from main import _format_hotkey, _parse_hotkey
+from main import VoiceCodeApp, _format_hotkey, _parse_hotkey
 
 
 class TestParseHotkey:
@@ -161,3 +164,148 @@ class TestParseAndFormatRoundtrip:
         parsed = _parse_hotkey("cmd+alt+r")
         formatted = _format_hotkey(parsed)
         assert formatted == "Alt+Cmd+R"
+
+
+class TestVoiceCodeAppConstants:
+    """VoiceCodeAppの定数テスト。"""
+
+    def test_icon_constants(self):
+        """状態アイコン定数が正しいこと。"""
+        assert VoiceCodeApp.ICON_IDLE == "■"
+        assert VoiceCodeApp.ICON_RECORDING == "●"
+        assert VoiceCodeApp.ICON_PROCESSING == "↻"
+
+    def test_sound_constants(self):
+        """効果音定数が正しいパスであること。"""
+        assert VoiceCodeApp.SOUND_START == "/System/Library/Sounds/Tink.aiff"
+        assert VoiceCodeApp.SOUND_STOP == "/System/Library/Sounds/Pop.aiff"
+        assert VoiceCodeApp.SOUND_SUCCESS == "/System/Library/Sounds/Glass.aiff"
+        assert VoiceCodeApp.SOUND_ERROR == "/System/Library/Sounds/Basso.aiff"
+
+
+class TestVoiceCodeAppPlaySound:
+    """VoiceCodeAppの_play_soundメソッドのテスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_play_sound_calls_afplay(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """_play_soundがafplayコマンドを呼び出すこと。"""
+        app = VoiceCodeApp()
+        app._play_sound("/System/Library/Sounds/Tink.aiff")
+
+        mock_popen.assert_called_with(
+            ["afplay", "/System/Library/Sounds/Tink.aiff"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_play_sound_runs_async(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """_play_soundが非同期で実行されること（Popenを使用）。"""
+        app = VoiceCodeApp()
+        app._play_sound("/System/Library/Sounds/Pop.aiff")
+
+        # Popen が呼ばれていることで非同期実行を確認
+        assert mock_popen.called
+
+
+class TestVoiceCodeAppInitialization:
+    """VoiceCodeAppの初期化テスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_init_sets_idle_title(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """初期化時にIDLEアイコンがタイトルに設定されること。"""
+        app = VoiceCodeApp()
+        assert app.title == VoiceCodeApp.ICON_IDLE
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_init_starts_keyboard_listener(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """初期化時にキーボードリスナーが起動されること。"""
+        app = VoiceCodeApp()
+        mock_listener.assert_called_once()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_init_starts_timeout_timer(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """初期化時にタイムアウトタイマーが起動されること。"""
+        app = VoiceCodeApp()
+        mock_timer.assert_called_once()
+        mock_timer.return_value.start.assert_called_once()

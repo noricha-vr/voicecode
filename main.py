@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """音声入力ツールのエントリポイント。
 
-設定されたホットキー（デフォルト: F13）で録音開始/停止をトグル。
+設定されたホットキー（デフォルト: F15）で録音開始/停止をトグル。
 録音停止後、文字起こし→LLM後処理→クリップボードにコピー→貼り付けを実行。
+メニューバーアプリとして動作し、状態をアイコンで表示する。
 """
 
 import os
-import sys
+import subprocess
+import threading
 import time
 from pathlib import Path
 
 import pyautogui
 import pyperclip
+import rumps
 from dotenv import load_dotenv
 from pynput import keyboard
 
@@ -24,7 +27,7 @@ def _parse_hotkey(hotkey_str: str) -> set[keyboard.Key | keyboard.KeyCode]:
     """環境変数文字列をパースしてキーセットに変換する。
 
     Args:
-        hotkey_str: ホットキー文字列（例: "f13", "ctrl+shift+r"）
+        hotkey_str: ホットキー文字列（例: "f15", "ctrl+shift+r"）
 
     Returns:
         pynputキーオブジェクトのセット
@@ -112,20 +115,73 @@ def _format_hotkey(keys: set[keyboard.Key | keyboard.KeyCode]) -> str:
     return "+".join(key_names)
 
 
-class VoiceInputTool:
-    """音声入力ツールのメインクラス。"""
+class VoiceCodeApp(rumps.App):
+    """音声入力ツールのメインクラス（メニューバーアプリ）。"""
+
+    # 状態アイコン定数
+    ICON_IDLE = "■"
+    ICON_RECORDING = "●"
+    ICON_PROCESSING = "↻"
+
+    # 効果音定数
+    SOUND_START = "/System/Library/Sounds/Tink.aiff"
+    SOUND_STOP = "/System/Library/Sounds/Pop.aiff"
+    SOUND_SUCCESS = "/System/Library/Sounds/Glass.aiff"
+    SOUND_ERROR = "/System/Library/Sounds/Basso.aiff"
 
     def __init__(self):
-        """VoiceInputToolを初期化する。"""
+        """VoiceCodeAppを初期化する。"""
+        super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
         load_dotenv()
 
-        self._hotkey = _parse_hotkey(os.getenv("HOTKEY", "f13"))
+        self._hotkey = _parse_hotkey(os.getenv("HOTKEY", "f15"))
         self._recorder = AudioRecorder()
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
 
         self._current_keys: set = set()
         self._processing = False
+
+        # キーボードリスナーを別スレッドで起動
+        self._start_keyboard_listener()
+
+    def _play_sound(self, sound_path: str) -> None:
+        """効果音を非同期再生する。
+
+        Args:
+            sound_path: 再生する効果音ファイルのパス
+        """
+        subprocess.Popen(
+            ["afplay", sound_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def _start_keyboard_listener(self) -> None:
+        """キーボードリスナーを別スレッドで起動する。"""
+        listener = keyboard.Listener(
+            on_press=self._on_press,
+            on_release=self._on_release,
+        )
+        listener_thread = threading.Thread(target=listener.start, daemon=True)
+        listener_thread.start()
+        # リスナーを保持しておく（停止時に必要な場合のため）
+        self._listener = listener
+
+        # タイムアウトチェック用タイマーを起動
+        self._timeout_timer = rumps.Timer(self._check_timeout, 0.5)
+        self._timeout_timer.start()
+
+    def _check_timeout(self, _) -> None:
+        """録音タイムアウトをチェックする。"""
+        if self._recorder.is_timeout and not self._processing:
+            print("\n[Timeout] Max recording duration reached")
+            self._stop_and_process()
+
+    @rumps.clicked("終了")
+    def quit_app(self, _):
+        """アプリを終了する。"""
+        rumps.quit_application()
 
     def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         """キー押下時のコールバック。"""
@@ -168,16 +224,22 @@ class VoiceInputTool:
         """録音を開始する。"""
         try:
             self._recorder.start()
+            self.title = self.ICON_RECORDING
+            self._play_sound(self.SOUND_START)
             hotkey_display = self._format_hotkey_display()
             print("\n" + "=" * 50)
             print(f"Recording... Press {hotkey_display} to stop")
             print("=" * 50)
         except Exception as e:
             print(f"[Error] Failed to start recording: {e}")
+            self.title = self.ICON_IDLE
+            self._play_sound(self.SOUND_ERROR)
 
     def _stop_and_process(self) -> None:
         """録音を停止し、処理を実行する。"""
         self._processing = True
+        self.title = self.ICON_PROCESSING
+        self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
 
         try:
@@ -191,6 +253,8 @@ class VoiceInputTool:
 
             if not transcribed_text.strip():
                 print("[Warning] No speech detected")
+                self.title = self.ICON_IDLE
+                self._play_sound(self.SOUND_ERROR)
                 return
 
             # LLM後処理
@@ -207,6 +271,9 @@ class VoiceInputTool:
             pyautogui.hotkey("command", "v")
             print("[Paste] Done!")
 
+            self.title = self.ICON_IDLE
+            self._play_sound(self.SOUND_SUCCESS)
+
             hotkey_display = self._format_hotkey_display()
             print("\n" + "=" * 50)
             print(f"Ready. Press {hotkey_display} to start recording")
@@ -214,6 +281,8 @@ class VoiceInputTool:
 
         except Exception as e:
             print(f"[Error] Processing failed: {e}")
+            self.title = self.ICON_IDLE
+            self._play_sound(self.SOUND_ERROR)
 
         finally:
             # 一時ファイルを削除
@@ -226,30 +295,11 @@ class VoiceInputTool:
 
             self._processing = False
 
-    def run(self) -> None:
-        """ツールを実行する。"""
-        hotkey_display = self._format_hotkey_display()
-        print("\n" + "=" * 50)
-        print("Voice Input Tool")
-        print("=" * 50)
-        print(f"Hotkey: {hotkey_display} (toggle recording)")
-        print("Press Ctrl+C to exit")
-        print("=" * 50 + "\n")
-
-        with keyboard.Listener(
-            on_press=self._on_press,
-            on_release=self._on_release,
-        ) as listener:
-            try:
-                listener.join()
-            except KeyboardInterrupt:
-                print("\n\nExiting...")
-
 
 def main() -> None:
     """エントリポイント。"""
-    tool = VoiceInputTool()
-    tool.run()
+    app = VoiceCodeApp()
+    app.run()
 
 
 if __name__ == "__main__":
