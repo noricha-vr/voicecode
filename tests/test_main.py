@@ -1,6 +1,7 @@
 """main.pyのホットキー関連機能のテスト。"""
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -309,3 +310,119 @@ class TestVoiceCodeAppInitialization:
         app = VoiceCodeApp()
         mock_timer.assert_called_once()
         mock_timer.return_value.start.assert_called_once()
+
+
+class TestVoiceCodeAppStopAndProcess:
+    """VoiceCodeAppの_stop_and_processメソッドのテスト。"""
+
+    @patch("main.keyboard.Controller")
+    @patch("main.pyperclip.copy")
+    @patch("main.time.sleep")
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_stop_and_process_uses_pynput_for_paste(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        mock_sleep,
+        mock_copy,
+        mock_controller_class,
+    ):
+        """貼り付け処理がpynputのControllerを使用すること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder_instance.is_timeout = False
+        mock_audio_path = MagicMock(spec=Path)
+        mock_audio_path.exists.return_value = True
+        mock_recorder_instance.stop.return_value = mock_audio_path
+        mock_recorder.return_value = mock_recorder_instance
+
+        mock_transcriber_instance = MagicMock()
+        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber.return_value = mock_transcriber_instance
+
+        mock_postprocessor_instance = MagicMock()
+        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor.return_value = mock_postprocessor_instance
+
+        mock_controller_instance = MagicMock()
+        mock_controller_class.return_value = mock_controller_instance
+
+        app = VoiceCodeApp()
+
+        # Act
+        app._stop_and_process()
+
+        # Assert
+        # pynput の Controller が作成されること
+        mock_controller_class.assert_called_once()
+        # pressed() が cmd キーで呼ばれること
+        mock_controller_instance.pressed.assert_called_once_with(keyboard.Key.cmd)
+        # tap() が 'v' で呼ばれること（コンテキストマネージャ内で）
+        mock_controller_instance.pressed.return_value.__enter__.assert_called_once()
+        mock_controller_instance.tap.assert_called_once_with('v')
+
+    @patch("main.keyboard.Controller")
+    @patch("main.pyperclip.copy")
+    @patch("main.time.sleep")
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_stop_and_process_copies_to_clipboard_before_paste(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        mock_sleep,
+        mock_copy,
+        mock_controller_class,
+    ):
+        """貼り付け前にクリップボードにコピーされること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder_instance.is_timeout = False
+        mock_audio_path = MagicMock(spec=Path)
+        mock_audio_path.exists.return_value = True
+        mock_recorder_instance.stop.return_value = mock_audio_path
+        mock_recorder.return_value = mock_recorder_instance
+
+        mock_transcriber_instance = MagicMock()
+        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber.return_value = mock_transcriber_instance
+
+        mock_postprocessor_instance = MagicMock()
+        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor.return_value = mock_postprocessor_instance
+
+        mock_controller_instance = MagicMock()
+        mock_controller_class.return_value = mock_controller_instance
+
+        app = VoiceCodeApp()
+
+        # Act
+        app._stop_and_process()
+
+        # Assert
+        mock_copy.assert_called_once_with("processed text")

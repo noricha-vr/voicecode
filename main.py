@@ -8,11 +8,9 @@
 
 import os
 import subprocess
-import threading
 import time
 from pathlib import Path
 
-import pyautogui
 import pyperclip
 import rumps
 from dotenv import load_dotenv
@@ -268,8 +266,10 @@ class VoiceCodeApp(rumps.App):
             # 少し待機してから貼り付け
             time.sleep(0.2)
 
-            # Cmd+V で貼り付け
-            pyautogui.hotkey("command", "v")
+            # Cmd+V で貼り付け（pynputを使用）
+            controller = keyboard.Controller()
+            with controller.pressed(keyboard.Key.cmd):
+                controller.tap('v')
             print("[Paste] Done!")
 
             self.title = self.ICON_IDLE
