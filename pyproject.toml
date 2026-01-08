@@ -16,13 +16,10 @@ dependencies = [
     "rumps>=0.4.0",
 ]
 
-[project.scripts]
-voicecode = "main:main"
-
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
 ]
 
 [tool.uv]
-package = true
+package = false
