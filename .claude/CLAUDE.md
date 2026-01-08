@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | パッケージ管理 | uv |
 | ホットキー | F15（.envで変更可能） |
 | 文字起こし | Groq Whisper (whisper-large-v3-turbo) |
-| 後処理 | Claude 3.5 Haiku |
+| 後処理 | Gemini 2.5 Flash Lite (OpenRouter) |
 
 ## プロジェクト概要
 
@@ -48,12 +48,12 @@ tail -f /tmp/voicecode.log
 
 `.env` に以下を設定:
 - `GROQ_API_KEY` - Groq Whisper API キー
-- `ANTHROPIC_API_KEY` - Anthropic Claude API キー
+- `OPENROUTER_API_KEY` - OpenRouter API キー
 
 ## アーキテクチャ
 
 ```
-録音 (pynput/sounddevice) → Whisper (Groq) → Claude (Anthropic) → 貼り付け (pyautogui)
+録音 (pynput/sounddevice) → Whisper (Groq) → Gemini (OpenRouter) → 貼り付け (pyautogui)
 ```
 
 ### モジュール構成
@@ -63,14 +63,14 @@ tail -f /tmp/voicecode.log
 | `main.py` | エントリポイント、キーボード監視、統合処理 |
 | `recorder.py` | 音声録音 (sounddevice) |
 | `transcriber.py` | 文字起こし (Groq Whisper API) |
-| `postprocessor.py` | LLM後処理 (Claude Haiku)、用語変換辞書 |
+| `postprocessor.py` | LLM後処理 (Gemini 2.5 Flash Lite)、用語変換辞書 |
 
 ### 処理フロー
 
 1. `VoiceInputTool` がホットキー監視 (pynput)
 2. `AudioRecorder` が WAV 録音 (16kHz, モノラル)
 3. `Transcriber` が Groq Whisper で文字起こし
-4. `PostProcessor` が Claude でプログラミング用語補正
+4. `PostProcessor` が Gemini でプログラミング用語補正
 5. pyperclip でクリップボードコピー、pyautogui で Cmd+V
 
 ## 設計パターン
