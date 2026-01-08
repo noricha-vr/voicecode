@@ -1,0 +1,28 @@
+[project]
+name = "voicecode"
+version = "0.1.0"
+description = "macOS用の音声入力ツール。ホットキーで録音→文字起こし→LLM後処理→貼り付けを自動化"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pynput>=1.7.6",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "groq>=0.4.0",
+    "anthropic>=0.18.0",
+    "pyperclip>=1.8.2",
+    "pyautogui>=0.9.54",
+    "python-dotenv>=1.0.0",
+    "rumps>=0.4.0",
+]
+
+[project.scripts]
+voicecode = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = true
