@@ -1,11 +1,11 @@
 """LLM後処理モジュール。
 
-Claude Haikuを使用して音声認識結果を修正する。
+Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
 """
 
 import os
 
-import anthropic
+from openai import OpenAI
 
 
 SYSTEM_PROMPT = """<instructions>
@@ -212,25 +212,28 @@ SYSTEM_PROMPT = """<instructions>
 class PostProcessor:
     """LLM後処理クラス。
 
-    Claude Haikuを使用して音声認識結果を修正する。
+    Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
     """
 
-    MODEL = "claude-3-5-haiku-latest"
+    MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
 
     def __init__(self, api_key: str | None = None):
         """PostProcessorを初期化する。
 
         Args:
-            api_key: Anthropic APIキー。Noneの場合は環境変数から取得。
+            api_key: OpenRouter APIキー。Noneの場合は環境変数から取得。
 
         Raises:
             ValueError: APIキーが設定されていない場合。
         """
-        self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        self._api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         if not self._api_key:
-            raise ValueError("ANTHROPIC_API_KEY is not set")
+            raise ValueError("OPENROUTER_API_KEY is not set")
 
-        self._client = anthropic.Anthropic(api_key=self._api_key)
+        self._client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=self._api_key,
+        )
 
     def process(self, text: str) -> str:
         """テキストをLLMで後処理する。
@@ -246,16 +249,14 @@ class PostProcessor:
 
         print(f"[PostProcess] Input: {text}")
 
-        message = self._client.messages.create(
+        response = self._client.chat.completions.create(
             model=self.MODEL,
-            max_tokens=1024,
             messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": text},
-                {"role": "assistant", "content": "解析中"},
-                {"role": "user", "content": SYSTEM_PROMPT},
             ],
         )
 
-        result = message.content[0].text.strip()
+        result = response.choices[0].message.content.strip()
         print(f"[PostProcess] Output: {result}")
         return result

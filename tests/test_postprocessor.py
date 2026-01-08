@@ -13,71 +13,75 @@ class TestPostProcessor:
     def test_init_without_api_key_raises_error(self):
         """APIキーがない場合にエラーが発生すること。"""
         with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is not set"):
+            with pytest.raises(ValueError, match="OPENROUTER_API_KEY is not set"):
                 PostProcessor()
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_init_with_api_key(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_init_with_api_key(self, mock_openai_class):
         """APIキーで初期化できること。"""
         processor = PostProcessor(api_key="test_key")
-        mock_anthropic_class.assert_called_once_with(api_key="test_key")
+        mock_openai_class.assert_called_once_with(
+            base_url="https://openrouter.ai/api/v1",
+            api_key="test_key",
+        )
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_init_with_env_var(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_init_with_env_var(self, mock_openai_class):
         """環境変数からAPIキーを取得できること。"""
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "env_key"}):
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "env_key"}):
             processor = PostProcessor()
-            mock_anthropic_class.assert_called_once_with(api_key="env_key")
+            mock_openai_class.assert_called_once_with(
+                base_url="https://openrouter.ai/api/v1",
+                api_key="env_key",
+            )
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_process_empty_string(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_process_empty_string(self, mock_openai_class):
         """空文字列の場合に空文字列が返されること。"""
         processor = PostProcessor(api_key="test_key")
         result = processor.process("")
         assert result == ""
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_process_whitespace_only(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_process_whitespace_only(self, mock_openai_class):
         """空白のみの場合に空文字列が返されること。"""
         processor = PostProcessor(api_key="test_key")
         result = processor.process("   \n\t  ")
         assert result == ""
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_process_success(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_process_success(self, mock_openai_class):
         """正常に処理できること。"""
         mock_client = MagicMock()
-        mock_anthropic_class.return_value = mock_client
+        mock_openai_class.return_value = mock_client
 
-        mock_message = MagicMock()
-        mock_message.content = [MagicMock(text="React")]
-        mock_client.messages.create.return_value = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="React"))]
+        mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
         result = processor.process("リアクト")
 
         assert result == "React"
-        mock_client.messages.create.assert_called_once()
+        mock_client.chat.completions.create.assert_called_once()
 
         # 呼び出し引数を検証
-        call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-3-5-haiku-latest"
-        assert "system" not in call_kwargs  # systemパラメータは使用しない
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == "google/gemini-2.5-flash-lite-preview-06-17"
         assert call_kwargs["messages"] == [
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "リアクト"},
-            {"role": "assistant", "content": "解析中"},
-            {"role": "user", "content": SYSTEM_PROMPT},
         ]
 
-    @patch("postprocessor.anthropic.Anthropic")
-    def test_process_strips_result(self, mock_anthropic_class):
+    @patch("postprocessor.OpenAI")
+    def test_process_strips_result(self, mock_openai_class):
         """結果の前後の空白が除去されること。"""
         mock_client = MagicMock()
-        mock_anthropic_class.return_value = mock_client
+        mock_openai_class.return_value = mock_client
 
-        mock_message = MagicMock()
-        mock_message.content = [MagicMock(text="  React  \n")]
-        mock_client.messages.create.return_value = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="  React  \n"))]
+        mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
         result = processor.process("リアクト")
@@ -86,7 +90,7 @@ class TestPostProcessor:
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
-        assert PostProcessor.MODEL == "claude-3-5-haiku-latest"
+        assert PostProcessor.MODEL == "google/gemini-2.5-flash-lite-preview-06-17"
 
     def test_system_prompt_contains_conversion_examples(self):
         """システムプロンプトに変換例が含まれていること。"""
