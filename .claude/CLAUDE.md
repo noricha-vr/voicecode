@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|-----|
 | Python | 3.13 |
 | パッケージ管理 | uv |
-| ホットキー | F15（.envで変更可能） |
+| ホットキー | F15（~/.voicecode/settings.json で設定） |
 | 文字起こし | Groq Whisper (whisper-large-v3-turbo) |
 | 後処理 | Gemini 2.5 Flash Lite (OpenRouter) |
 

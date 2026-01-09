@@ -46,8 +46,9 @@ cp .env.example .env
 ```bash
 GROQ_API_KEY=your_groq_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
-HOTKEY=f15  # ホットキー（デフォルト: f15、例: ctrl+shift+r）
 ```
+
+ホットキーはメニューバーの「ホットキー設定...」から変更できます。設定は `~/.voicecode/settings.json` に保存されます。
 
 ### 3. macOS 権限の設定
 
@@ -65,7 +66,7 @@ HOTKEY=f15  # ホットキー（デフォルト: f15、例: ctrl+shift+r）
 uv run python main.py
 ```
 
-1. **録音開始**: F15 を押す（デフォルト、`.env` の `HOTKEY` で変更可能）
+1. **録音開始**: F15 を押す（デフォルト、メニューバーから変更可能）
 2. **話す**: マイクに向かって話す
 3. **録音停止**: F15 を再度押す
 4. **自動処理**: 文字起こし → 後処理 → 貼り付けが実行される

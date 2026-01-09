@@ -7,7 +7,6 @@
 """
 
 import logging
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -142,13 +141,8 @@ class VoiceCodeApp(rumps.App):
         super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
         load_dotenv()
 
-        # 設定を読み込み（settings.json優先、なければ.envのHOTKEY）
+        # 設定を読み込み（settings.json から、なければデフォルト値）
         self._settings = Settings()
-        env_hotkey = os.getenv("HOTKEY", "f15")
-        # settings.jsonが存在しない場合は.envの値を使用
-        if not (Path.home() / ".voicecode" / "settings.json").exists():
-            self._settings.hotkey = env_hotkey
-            self._settings.save()
 
         self._hotkey = _parse_hotkey(self._settings.hotkey)
         self._recorder = AudioRecorder()
