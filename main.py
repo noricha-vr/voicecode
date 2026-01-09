@@ -6,6 +6,12 @@
 メニューバーアプリとして動作し、状態をアイコンで表示する。
 """
 
+import sys
+
+if sys.platform != "darwin":
+    print("VoiceCode は macOS 専用です")
+    sys.exit(1)
+
 import logging
 import subprocess
 import time
