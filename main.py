@@ -16,6 +16,7 @@ import rumps
 from dotenv import load_dotenv
 from pynput import keyboard
 
+from overlay import RecordingOverlay
 from postprocessor import PostProcessor
 from recorder import AudioRecorder
 from settings import Settings
@@ -151,6 +152,7 @@ class VoiceCodeApp(rumps.App):
 
         self._current_keys: set = set()
         self._processing = False
+        self._overlay = RecordingOverlay()
 
         # メニュー項目を初期化
         self._init_menu()
@@ -303,6 +305,7 @@ class VoiceCodeApp(rumps.App):
         try:
             self._recorder.start()
             self.title = self.ICON_RECORDING
+            self._overlay.show()
             self._play_sound(self.SOUND_START)
             hotkey_display = self._format_hotkey_display()
             print("\n" + "=" * 50)
@@ -317,6 +320,7 @@ class VoiceCodeApp(rumps.App):
         """録音を停止し、処理を実行する。"""
         self._processing = True
         self.title = self.ICON_PROCESSING
+        self._overlay.hide()
         self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
         original_clipboard: str | None = None
