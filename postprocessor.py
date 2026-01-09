@@ -5,6 +5,7 @@ Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を�
 
 import os
 import re
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -134,6 +135,36 @@ SYSTEM_PROMPT = """<instructions>
 <output>APIを呼び出す</output>
 <explanation>「が」は助詞の誤り、「を」が正しい</explanation>
 </example>
+
+<example name="同音異義語修正（上記/蒸気）">
+<input>蒸気のコードを参考にしてください</input>
+<output>上記のコードを参考にしてください</output>
+<explanation>プログラミング文脈で「コードを参考」なら「上記」が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（機能/昨日）">
+<input>昨日を実装する</input>
+<output>機能を実装する</output>
+<explanation>「実装する」があるのでプログラミング文脈、「機能」が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（構成/校正）">
+<input>ファイル校正を確認する</input>
+<output>ファイル構成を確認する</output>
+<explanation>プログラミング文脈で「ファイル」と組み合わせなら「構成」が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（仕様/使用）">
+<input>APIの使用を確認する</input>
+<output>APIの仕様を確認する</output>
+<explanation>「確認する」対象として「API」があれば「仕様」が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（使用/仕様）">
+<input>このライブラリを仕様する</input>
+<output>このライブラリを使用する</output>
+<explanation>「〜を○○する」の形で動詞として使われているなら「使用」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
@@ -210,6 +241,38 @@ SYSTEM_PROMPT = """<instructions>
 </instructions>"""
 
 
+def _load_user_dictionary() -> str:
+    """ユーザー辞書を読み込んでXML形式で返す。
+
+    ~/.voicecode/dictionary.txt を読み込み、<category>タグで囲んだXML形式で返す。
+
+    Returns:
+        ユーザー辞書のXML文字列。辞書が存在しないか空の場合は空文字列。
+    """
+    dict_path = Path.home() / ".voicecode" / "dictionary.txt"
+    if not dict_path.exists():
+        return ""
+
+    terms = []
+    with open(dict_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2:
+                continue
+            japanese, english = parts
+            terms.append(
+                f'<term japanese="{japanese}" english="{english}" context="always"/>'
+            )
+
+    if not terms:
+        return ""
+
+    return "\n<category name=\"ユーザー辞書\">\n" + "\n".join(terms) + "\n</category>"
+
+
 class PostProcessor:
     """LLM後処理クラス。
 
@@ -236,6 +299,16 @@ class PostProcessor:
             api_key=self._api_key,
         )
 
+        # ユーザー辞書を読み込んでシステムプロンプトに追加
+        user_dict = _load_user_dictionary()
+        if user_dict:
+            # </terminology> の直前にユーザー辞書を挿入
+            self._system_prompt = SYSTEM_PROMPT.replace(
+                "</terminology>", user_dict + "\n</terminology>"
+            )
+        else:
+            self._system_prompt = SYSTEM_PROMPT
+
     def process(self, text: str) -> str:
         """テキストをLLMで後処理する。
 
@@ -253,7 +326,7 @@ class PostProcessor:
         response = self._client.chat.completions.create(
             model=self.MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": text},
             ],
         )

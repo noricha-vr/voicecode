@@ -1,10 +1,11 @@
 """LLM後処理機能のテスト。"""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from postprocessor import PostProcessor, SYSTEM_PROMPT
+from postprocessor import PostProcessor, SYSTEM_PROMPT, _load_user_dictionary
 
 
 class TestPostProcessor:
@@ -50,7 +51,8 @@ class TestPostProcessor:
         assert result == ""
 
     @patch("postprocessor.OpenAI")
-    def test_process_success(self, mock_openai_class):
+    @patch("postprocessor._load_user_dictionary", return_value="")
+    def test_process_success(self, mock_load_dict, mock_openai_class):
         """正常に処理できること。"""
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
@@ -148,3 +150,127 @@ class TestPostProcessor:
         assert 'japanese="ユースエフェクト" english="useEffect"' in SYSTEM_PROMPT
         assert 'japanese="クロード" english="Claude"' in SYSTEM_PROMPT
         assert 'japanese="ジーピーティー" english="GPT"' in SYSTEM_PROMPT
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary")
+    def test_init_loads_user_dictionary(self, mock_load_dict, mock_openai_class):
+        """初期化時にユーザー辞書が読み込まれること。"""
+        mock_load_dict.return_value = '\n<category name="ユーザー辞書">\n<term japanese="クロードコード" english="Claude Code" context="always"/>\n</category>'
+
+        processor = PostProcessor(api_key="test_key")
+
+        mock_load_dict.assert_called_once()
+        assert "ユーザー辞書" in processor._system_prompt
+        assert 'japanese="クロードコード" english="Claude Code"' in processor._system_prompt
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary")
+    def test_init_without_user_dictionary(self, mock_load_dict, mock_openai_class):
+        """ユーザー辞書がない場合はデフォルトのシステムプロンプトが使用されること。"""
+        mock_load_dict.return_value = ""
+
+        processor = PostProcessor(api_key="test_key")
+
+        mock_load_dict.assert_called_once()
+        assert processor._system_prompt == SYSTEM_PROMPT
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary")
+    def test_process_uses_system_prompt_with_user_dictionary(
+        self, mock_load_dict, mock_openai_class
+    ):
+        """processメソッドがユーザー辞書を含むシステムプロンプトを使用すること。"""
+        mock_load_dict.return_value = '\n<category name="ユーザー辞書">\n<term japanese="テスト" english="Test" context="always"/>\n</category>'
+
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="Test"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        processor.process("テスト")
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "ユーザー辞書" in call_kwargs["messages"][0]["content"]
+
+
+class TestLoadUserDictionary:
+    """_load_user_dictionary関数のテスト。"""
+
+    def test_returns_empty_when_file_not_exists(self, tmp_path):
+        """辞書ファイルが存在しない場合に空文字列を返すこと。"""
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert result == ""
+
+    def test_returns_empty_when_file_is_empty(self, tmp_path):
+        """辞書ファイルが空の場合に空文字列を返すこと。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert result == ""
+
+    def test_returns_empty_when_only_comments(self, tmp_path):
+        """コメント行のみの場合に空文字列を返すこと。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("# コメント行\n# もう一つのコメント\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert result == ""
+
+    def test_parses_valid_entries(self, tmp_path):
+        """有効なエントリを正しくパースすること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("クロードコード\tClaude Code\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert 'category name="ユーザー辞書"' in result
+            assert 'japanese="クロードコード" english="Claude Code"' in result
+
+    def test_parses_multiple_readings(self, tmp_path):
+        """複数の読み（カンマ区切り）を正しくパースすること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("ネクスト,ネクストJS\tNext.js\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert 'japanese="ネクスト,ネクストJS" english="Next.js"' in result
+
+    def test_ignores_comments_and_empty_lines(self, tmp_path):
+        """コメント行と空行を無視すること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("# コメント\nクロードコード\tClaude Code\n\n# もう一つ\nスベルトキット\tSvelteKit\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert 'japanese="クロードコード" english="Claude Code"' in result
+            assert 'japanese="スベルトキット" english="SvelteKit"' in result
+            assert "# コメント" not in result
+
+    def test_ignores_invalid_lines(self, tmp_path):
+        """不正な形式の行を無視すること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("不正な行\nクロードコード\tClaude Code\nタブなし行\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            result = _load_user_dictionary()
+            assert 'japanese="クロードコード" english="Claude Code"' in result
+            assert "不正な行" not in result
+            assert "タブなし行" not in result
