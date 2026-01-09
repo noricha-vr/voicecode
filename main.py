@@ -16,6 +16,7 @@ import rumps
 from dotenv import load_dotenv
 from pynput import keyboard
 
+from history import HistoryManager
 from overlay import RecordingOverlay
 from postprocessor import PostProcessor
 from recorder import AudioRecorder
@@ -149,6 +150,7 @@ class VoiceCodeApp(rumps.App):
         self._recorder = AudioRecorder()
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
+        self._history_manager = HistoryManager()
 
         self._current_keys: set = set()
         self._processing = False
@@ -324,6 +326,8 @@ class VoiceCodeApp(rumps.App):
         self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
         original_clipboard: str | None = None
+        transcribed_text: str = ""
+        processed_text: str = ""
 
         try:
             audio_path = self._recorder.stop()
@@ -362,6 +366,14 @@ class VoiceCodeApp(rumps.App):
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
             print("[Paste] Done!")
+
+            # 履歴を保存（貼り付け完了後、一時ファイル削除前）
+            if audio_path and audio_path.exists():
+                self._history_manager.save(
+                    audio_path=audio_path,
+                    raw_transcription=transcribed_text,
+                    processed_text=processed_text,
+                )
 
             self.title = self.ICON_IDLE
             self._play_sound(self.SOUND_SUCCESS)
