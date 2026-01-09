@@ -80,6 +80,23 @@ tail -f /tmp/voicecode.log
 - 一時ファイル（WAV）は処理後に自動削除
 - テストは `unittest.mock` で API モック化
 
+### rumps と PyObjC の併用
+
+```
+rumps（高レベルAPI）→ 内部で PyObjC を使用
+PyObjC（低レベルAPI）→ rumps で足りない部分を補完
+```
+
+| レイヤー | カバー範囲 |
+|----------|-----------|
+| rumps | メニューバーアプリ基本構造、メニュー項目、通知、タイマー |
+| PyObjC | クリップボード操作、システムサウンド、その他 macOS ネイティブ API |
+
+**設計原則**:
+- rumps をベースにして、rumps でできないことだけ PyObjC で補う
+- rumps 内部で PyObjC を使用しているため、両者は同じイベントループを共有
+- PyObjC の直接使用は最小限に抑え、rumps の機能を優先する
+
 ## macOS 権限要件
 
 システム設定 > プライバシーとセキュリティ で以下を許可:
