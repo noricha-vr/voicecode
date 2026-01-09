@@ -67,7 +67,7 @@ class TestPostProcessor:
 
         # 呼び出し引数を検証
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["model"] == "google/gemini-2.5-flash-lite-preview-06-17"
+        assert call_kwargs["model"] == "google/gemini-2.5-flash-lite"
         assert call_kwargs["messages"] == [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "リアクト"},
@@ -90,7 +90,7 @@ class TestPostProcessor:
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
-        assert PostProcessor.MODEL == "google/gemini-2.5-flash-lite-preview-06-17"
+        assert PostProcessor.MODEL == "google/gemini-2.5-flash-lite"
 
     def test_system_prompt_contains_conversion_examples(self):
         """システムプロンプトに変換例が含まれていること。"""
