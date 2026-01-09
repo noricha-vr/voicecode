@@ -375,6 +375,7 @@ class TestVoiceCodeAppStopAndProcess:
         mock_controller_instance.tap.assert_called_once_with('v')
 
     @patch("main.keyboard.Controller")
+    @patch("main.pyperclip.paste")
     @patch("main.pyperclip.copy")
     @patch("main.time.sleep")
     @patch("main.subprocess.Popen")
@@ -396,9 +397,10 @@ class TestVoiceCodeAppStopAndProcess:
         mock_popen,
         mock_sleep,
         mock_copy,
+        mock_paste,
         mock_controller_class,
     ):
-        """貼り付け前にクリップボードにコピーされること。"""
+        """貼り付け前にクリップボードにコピーされ、元の内容が復元されること。"""
         # Arrange
         mock_recorder_instance = MagicMock()
         mock_recorder_instance.is_recording = True
@@ -419,10 +421,80 @@ class TestVoiceCodeAppStopAndProcess:
         mock_controller_instance = MagicMock()
         mock_controller_class.return_value = mock_controller_instance
 
+        # クリップボードに元のデータがある状態をシミュレート
+        mock_paste.return_value = "original clipboard content"
+
         app = VoiceCodeApp()
 
         # Act
         app._stop_and_process()
 
         # Assert
+        # copy が2回呼ばれること（1回目: 処理結果、2回目: 元の内容を復元）
+        assert mock_copy.call_count == 2
+        # 1回目の呼び出しは処理結果をコピー
+        mock_copy.assert_any_call("processed text")
+        # 2回目の呼び出しは元の内容を復元
+        mock_copy.assert_any_call("original clipboard content")
+
+    @patch("main.keyboard.Controller")
+    @patch("main.pyperclip.paste")
+    @patch("main.pyperclip.copy")
+    @patch("main.time.sleep")
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_stop_and_process_no_restore_when_disabled(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        mock_sleep,
+        mock_copy,
+        mock_paste,
+        mock_controller_class,
+    ):
+        """クリップボード復元が無効の場合、復元されないこと。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder_instance.is_timeout = False
+        mock_audio_path = MagicMock(spec=Path)
+        mock_audio_path.exists.return_value = True
+        mock_recorder_instance.stop.return_value = mock_audio_path
+        mock_recorder.return_value = mock_recorder_instance
+
+        mock_transcriber_instance = MagicMock()
+        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber.return_value = mock_transcriber_instance
+
+        mock_postprocessor_instance = MagicMock()
+        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor.return_value = mock_postprocessor_instance
+
+        mock_controller_instance = MagicMock()
+        mock_controller_class.return_value = mock_controller_instance
+
+        mock_paste.return_value = "original clipboard content"
+
+        app = VoiceCodeApp()
+        # クリップボード復元を無効にする
+        app._settings.restore_clipboard = False
+
+        # Act
+        app._stop_and_process()
+
+        # Assert
+        # copy が1回のみ呼ばれること（復元なし）
         mock_copy.assert_called_once_with("processed text")
+        # paste は呼ばれないこと（元の内容を取得しない）
+        mock_paste.assert_not_called()

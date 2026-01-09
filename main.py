@@ -18,6 +18,7 @@ from pynput import keyboard
 
 from postprocessor import PostProcessor
 from recorder import AudioRecorder
+from settings import Settings
 from transcriber import Transcriber
 
 
@@ -132,13 +133,28 @@ class VoiceCodeApp(rumps.App):
         super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
         load_dotenv()
 
-        self._hotkey = _parse_hotkey(os.getenv("HOTKEY", "f15"))
+        # 設定を読み込み（settings.json優先、なければ.envのHOTKEY）
+        self._settings = Settings()
+        env_hotkey = os.getenv("HOTKEY", "f15")
+        # settings.jsonが存在しない場合は.envの値を使用
+        if not (Path.home() / ".voicecode" / "settings.json").exists():
+            self._settings.hotkey = env_hotkey
+            self._settings.save()
+
+        self._hotkey = _parse_hotkey(self._settings.hotkey)
         self._recorder = AudioRecorder()
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
 
         self._current_keys: set = set()
         self._processing = False
+
+        # レコードモード用の変数
+        self._recording_hotkey = False
+        self._recorded_key: str | None = None
+
+        # メニュー項目を初期化
+        self._init_menu()
 
         # キーボードリスナーを別スレッドで起動
         self._start_keyboard_listener()
@@ -170,6 +186,114 @@ class VoiceCodeApp(rumps.App):
 
         hotkey_display = self._format_hotkey_display()
         print(f"[Info] Keyboard listener started. Hotkey: {hotkey_display}")
+
+    def _init_menu(self) -> None:
+        """メニュー項目を初期化する。"""
+        self._hotkey_item = rumps.MenuItem("ホットキー設定...", callback=self._on_hotkey_settings)
+        self._restore_item = rumps.MenuItem(
+            "クリップボードを復元",
+            callback=self._on_toggle_restore_clipboard,
+        )
+        self._restore_item.state = 1 if self._settings.restore_clipboard else 0
+
+        self.menu = [
+            self._hotkey_item,
+            self._restore_item,
+            rumps.separator,
+        ]
+
+    def _on_hotkey_settings(self, _) -> None:
+        """ホットキー設定ダイアログを表示する。"""
+        current_hotkey = self._settings.hotkey
+        window = rumps.Window(
+            message=f"現在のホットキー: {current_hotkey.upper()}\n\n"
+                    "新しいホットキーを入力してください\n"
+                    "(例: f15, ctrl+shift+r)",
+            title="ホットキー設定",
+            default_text=current_hotkey,
+            ok="保存",
+            cancel="キャンセル",
+        )
+        window.add_button("記録")
+
+        response = window.run()
+
+        # response.clicked: 1=保存, 0=キャンセル, 2=記録
+        if response.clicked == 1:
+            # 保存ボタン
+            new_hotkey = response.text.strip()
+            if new_hotkey:
+                self._update_hotkey(new_hotkey)
+        elif response.clicked == 2:
+            # 記録ボタン
+            self._start_record_mode()
+
+    def _start_record_mode(self) -> None:
+        """レコードモードを開始する。"""
+        self._recording_hotkey = True
+        self._recorded_key = None
+
+        # 一時的なキーボードリスナーを起動
+        def on_press(key):
+            if self._recording_hotkey:
+                self._recorded_key = self._key_to_string(key)
+                self._recording_hotkey = False
+                return False  # リスナーを停止
+
+        record_listener = keyboard.Listener(on_press=on_press)
+        record_listener.start()
+
+        # アラートを表示
+        rumps.alert(
+            title="ホットキー記録",
+            message="キーを押してください...\n\n"
+                    "ファンクションキー（F1-F20）または\n"
+                    "修飾キー+文字キーの組み合わせを押してください。",
+        )
+
+        record_listener.stop()
+
+        if self._recorded_key:
+            self._update_hotkey(self._recorded_key)
+            rumps.alert(
+                title="ホットキー設定完了",
+                message=f"ホットキーを {self._recorded_key.upper()} に設定しました。",
+            )
+
+    def _key_to_string(self, key: keyboard.Key | keyboard.KeyCode) -> str:
+        """キーオブジェクトを文字列に変換する。"""
+        if isinstance(key, keyboard.Key):
+            return key.name.lower()
+        elif isinstance(key, keyboard.KeyCode):
+            if key.char:
+                return key.char.lower()
+            elif key.vk:
+                # ファンクションキーなどの仮想キーコード
+                return f"vk{key.vk}"
+        return ""
+
+    def _update_hotkey(self, new_hotkey: str) -> None:
+        """ホットキーを更新する。"""
+        try:
+            new_keys = _parse_hotkey(new_hotkey)
+            self._hotkey = new_keys
+            self._settings.hotkey = new_hotkey
+            self._settings.save()
+            print(f"[Info] Hotkey updated to: {new_hotkey.upper()}")
+        except ValueError as e:
+            rumps.alert(
+                title="エラー",
+                message=f"無効なホットキーです: {e}",
+            )
+
+    def _on_toggle_restore_clipboard(self, sender: rumps.MenuItem) -> None:
+        """クリップボード復元設定をトグルする。"""
+        new_state = not self._settings.restore_clipboard
+        self._settings.restore_clipboard = new_state
+        self._settings.save()
+        sender.state = 1 if new_state else 0
+        status = "有効" if new_state else "無効"
+        print(f"[Info] Restore clipboard: {status}")
 
     def _check_timeout(self, _) -> None:
         """録音タイムアウトをチェックする。"""
@@ -240,6 +364,7 @@ class VoiceCodeApp(rumps.App):
         self.title = self.ICON_PROCESSING
         self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
+        original_clipboard: str | None = None
 
         try:
             audio_path = self._recorder.stop()
@@ -258,6 +383,13 @@ class VoiceCodeApp(rumps.App):
 
             # LLM後処理
             processed_text = self._postprocessor.process(transcribed_text)
+
+            # クリップボード復元が有効な場合、元の内容を保存
+            if self._settings.restore_clipboard:
+                try:
+                    original_clipboard = pyperclip.paste()
+                except Exception:
+                    pass
 
             # クリップボードにコピー
             pyperclip.copy(processed_text)
@@ -286,6 +418,15 @@ class VoiceCodeApp(rumps.App):
             self._play_sound(self.SOUND_ERROR)
 
         finally:
+            # クリップボードを復元
+            if original_clipboard is not None:
+                try:
+                    time.sleep(0.1)
+                    pyperclip.copy(original_clipboard)
+                    print("[Clipboard] Restored original content")
+                except Exception:
+                    pass
+
             # 一時ファイルを削除
             if audio_path and audio_path.exists():
                 try:
