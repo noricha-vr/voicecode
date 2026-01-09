@@ -4,6 +4,7 @@ Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を�
 """
 
 import os
+import re
 
 from openai import OpenAI
 
@@ -258,5 +259,10 @@ class PostProcessor:
         )
 
         result = response.choices[0].message.content.strip()
+
+        # LLMが出力に付けるXMLタグを除去
+        result = re.sub(r'^<output>\s*', '', result)
+        result = re.sub(r'\s*</output>$', '', result)
+
         print(f"[PostProcess] Output: {result}")
         return result

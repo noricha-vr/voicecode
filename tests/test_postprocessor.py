@@ -88,6 +88,36 @@ class TestPostProcessor:
 
         assert result == "React"
 
+    @patch("postprocessor.OpenAI")
+    def test_process_removes_output_xml_tags(self, mock_openai_class):
+        """出力からXMLタグ<output>が除去されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="<output>テスト</output>"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result = processor.process("テスト")
+
+        assert result == "テスト"
+
+    @patch("postprocessor.OpenAI")
+    def test_process_without_xml_tags(self, mock_openai_class):
+        """XMLタグがない場合はそのまま返されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="テスト"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result = processor.process("テスト")
+
+        assert result == "テスト"
+
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
         assert PostProcessor.MODEL == "google/gemini-2.5-flash-lite"
