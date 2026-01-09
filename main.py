@@ -6,6 +6,7 @@
 メニューバーアプリとして動作し、状態をアイコンで表示する。
 """
 
+import logging
 import os
 import subprocess
 import time
@@ -20,6 +21,14 @@ from postprocessor import PostProcessor
 from recorder import AudioRecorder
 from settings import Settings
 from transcriber import Transcriber
+
+# デバッグ用ログ設定
+logging.basicConfig(
+    filename='/tmp/voicecode_debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def _parse_hotkey(hotkey_str: str) -> set[keyboard.Key | keyboard.KeyCode]:
@@ -149,10 +158,6 @@ class VoiceCodeApp(rumps.App):
         self._current_keys: set = set()
         self._processing = False
 
-        # レコードモード用の変数
-        self._recording_hotkey = False
-        self._recorded_key: str | None = None
-
         # メニュー項目を初期化
         self._init_menu()
 
@@ -186,6 +191,7 @@ class VoiceCodeApp(rumps.App):
 
         hotkey_display = self._format_hotkey_display()
         print(f"[Info] Keyboard listener started. Hotkey: {hotkey_display}")
+        logger.info(f"Keyboard listener started. Hotkey: {hotkey_display}")
 
     def _init_menu(self) -> None:
         """メニュー項目を初期化する。"""
@@ -214,63 +220,14 @@ class VoiceCodeApp(rumps.App):
             ok="保存",
             cancel="キャンセル",
         )
-        window.add_button("記録")
-
         response = window.run()
 
-        # response.clicked: 1=保存, 0=キャンセル, 2=記録
+        # response.clicked: 1=保存, 0=キャンセル
         if response.clicked == 1:
             # 保存ボタン
             new_hotkey = response.text.strip()
             if new_hotkey:
                 self._update_hotkey(new_hotkey)
-        elif response.clicked == 2:
-            # 記録ボタン
-            self._start_record_mode()
-
-    def _start_record_mode(self) -> None:
-        """レコードモードを開始する。"""
-        self._recording_hotkey = True
-        self._recorded_key = None
-
-        # 一時的なキーボードリスナーを起動
-        def on_press(key):
-            if self._recording_hotkey:
-                self._recorded_key = self._key_to_string(key)
-                self._recording_hotkey = False
-                return False  # リスナーを停止
-
-        record_listener = keyboard.Listener(on_press=on_press)
-        record_listener.start()
-
-        # アラートを表示
-        rumps.alert(
-            title="ホットキー記録",
-            message="キーを押してください...\n\n"
-                    "ファンクションキー（F1-F20）または\n"
-                    "修飾キー+文字キーの組み合わせを押してください。",
-        )
-
-        record_listener.stop()
-
-        if self._recorded_key:
-            self._update_hotkey(self._recorded_key)
-            rumps.alert(
-                title="ホットキー設定完了",
-                message=f"ホットキーを {self._recorded_key.upper()} に設定しました。",
-            )
-
-    def _key_to_string(self, key: keyboard.Key | keyboard.KeyCode) -> str:
-        """キーオブジェクトを文字列に変換する。"""
-        if isinstance(key, keyboard.Key):
-            return key.name.lower()
-        elif isinstance(key, keyboard.KeyCode):
-            if key.char:
-                return key.char.lower()
-            elif key.vk:
-                # ファンクションキーなどの仮想キーコード
-                return f"vk{key.vk}"
-        return ""
 
     def _update_hotkey(self, new_hotkey: str) -> None:
         """ホットキーを更新する。"""
@@ -308,6 +265,7 @@ class VoiceCodeApp(rumps.App):
 
     def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         """キー押下時のコールバック。"""
+        logger.debug(f"Key pressed: {key}")
         normalized_key = self._normalize_key(key)
         self._current_keys.add(normalized_key)
 
@@ -316,6 +274,7 @@ class VoiceCodeApp(rumps.App):
 
     def _on_release(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         """キー解放時のコールバック。"""
+        logger.debug(f"Key released: {key}")
         normalized_key = self._normalize_key(key)
         self._current_keys.discard(normalized_key)
 
@@ -327,7 +286,9 @@ class VoiceCodeApp(rumps.App):
 
     def _check_hotkey(self) -> bool:
         """ホットキーが押されているかチェックする。"""
-        return self._hotkey <= self._current_keys
+        result = self._hotkey <= self._current_keys
+        logger.debug(f"Checking hotkey: current_keys={self._current_keys}, hotkey={self._hotkey}, match={result}")
+        return result
 
     def _format_hotkey_display(self) -> str:
         """ホットキーを表示用に整形する。"""
