@@ -228,6 +228,9 @@ class VoiceCodeApp(rumps.App):
         # 設定を読み込み（settings.json から、なければデフォルト値）
         self._settings = Settings()
 
+        # 起動時に設定内容をログ出力
+        self._log_settings()
+
         self._hotkey = _parse_hotkey(self._settings.hotkey)
         recording_config = RecordingConfig(
             max_duration=self._settings.max_recording_duration
@@ -272,9 +275,11 @@ class VoiceCodeApp(rumps.App):
         self._timeout_timer = rumps.Timer(self._check_timeout, 0.5)
         self._timeout_timer.start()
 
-        hotkey_display = self._format_hotkey_display()
-        print(f"[Info] Keyboard listener started. Hotkey: {hotkey_display}")
-        logger.info(f"Keyboard listener started. Hotkey: {hotkey_display}")
+    def _log_settings(self) -> None:
+        """現在の設定内容をログ出力する。"""
+        logger.info(f"[Settings] Hotkey: {self._settings.hotkey.upper()}")
+        logger.info(f"[Settings] Max Recording: {self._settings.max_recording_duration}s")
+        logger.info(f"[Settings] Restore Clipboard: {self._settings.restore_clipboard}")
 
     def _init_menu(self) -> None:
         """メニュー項目を初期化する。"""

@@ -632,6 +632,101 @@ class TestVoiceCodeAppStopAndProcess:
         mock_copy.assert_called()
         mock_controller_instance.tap.assert_called_once_with('v')
 
+class TestVoiceCodeAppLogSettings:
+    """VoiceCodeAppの_log_settingsメソッドのテスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_log_settings_outputs_all_settings(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """_log_settingsが全ての設定を出力すること。"""
+        with caplog.at_level(logging.INFO):
+            app = VoiceCodeApp()
+            # 設定をモックして再度ログ出力
+            app._settings._hotkey = "f15"
+            app._settings._max_recording_duration = 120
+            app._settings._restore_clipboard = True
+            caplog.clear()
+            app._log_settings()
+
+        # 設定ログが出力されていることを確認
+        assert "[Settings] Hotkey: F15" in caplog.text
+        assert "[Settings] Max Recording: 120s" in caplog.text
+        assert "[Settings] Restore Clipboard: True" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_log_settings_hotkey_uppercase(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """_log_settingsがホットキーを大文字で出力すること。"""
+        with caplog.at_level(logging.INFO):
+            app = VoiceCodeApp()
+            # 設定を小文字で保存されていても大文字で出力される
+            app._settings.hotkey = "ctrl+shift+r"
+            caplog.clear()
+            app._log_settings()
+
+        assert "[Settings] Hotkey: CTRL+SHIFT+R" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_log_settings_restore_clipboard_false(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """_log_settingsがrestore_clipboard=Falseを正しく出力すること。"""
+        with caplog.at_level(logging.INFO):
+            app = VoiceCodeApp()
+            app._settings._restore_clipboard = False
+            caplog.clear()
+            app._log_settings()
+
+        assert "[Settings] Restore Clipboard: False" in caplog.text
+
+
 class TestVoiceCodeAppCheckTimeout:
     """VoiceCodeAppの_check_timeoutメソッドのテスト。"""
 
