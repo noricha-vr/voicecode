@@ -54,8 +54,10 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result = transcriber.transcribe(temp_path)
+            result, elapsed = transcriber.transcribe(temp_path)
             assert result == "テスト結果"
+            assert isinstance(elapsed, float)
+            assert elapsed >= 0
             mock_client.audio.transcriptions.create.assert_called_once()
         finally:
             temp_path.unlink()
@@ -74,8 +76,9 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result = transcriber.transcribe(temp_path)
+            result, elapsed = transcriber.transcribe(temp_path)
             assert result == "結果"
+            assert isinstance(elapsed, float)
         finally:
             temp_path.unlink()
 

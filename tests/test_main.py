@@ -350,11 +350,11 @@ class TestVoiceCodeAppStopAndProcess:
         mock_recorder.return_value = mock_recorder_instance
 
         mock_transcriber_instance = MagicMock()
-        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber_instance.transcribe.return_value = ("テスト音声", 1.23)
         mock_transcriber.return_value = mock_transcriber_instance
 
         mock_postprocessor_instance = MagicMock()
-        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor_instance.process.return_value = ("processed text", 0.45)
         mock_postprocessor.return_value = mock_postprocessor_instance
 
         mock_controller_instance = MagicMock()
@@ -411,11 +411,11 @@ class TestVoiceCodeAppStopAndProcess:
         mock_recorder.return_value = mock_recorder_instance
 
         mock_transcriber_instance = MagicMock()
-        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber_instance.transcribe.return_value = ("テスト音声", 1.23)
         mock_transcriber.return_value = mock_transcriber_instance
 
         mock_postprocessor_instance = MagicMock()
-        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor_instance.process.return_value = ("processed text", 0.45)
         mock_postprocessor.return_value = mock_postprocessor_instance
 
         mock_controller_instance = MagicMock()
@@ -474,11 +474,11 @@ class TestVoiceCodeAppStopAndProcess:
         mock_recorder.return_value = mock_recorder_instance
 
         mock_transcriber_instance = MagicMock()
-        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber_instance.transcribe.return_value = ("テスト音声", 1.23)
         mock_transcriber.return_value = mock_transcriber_instance
 
         mock_postprocessor_instance = MagicMock()
-        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor_instance.process.return_value = ("processed text", 0.45)
         mock_postprocessor.return_value = mock_postprocessor_instance
 
         mock_controller_instance = MagicMock()
@@ -538,11 +538,11 @@ class TestVoiceCodeAppStopAndProcess:
         mock_recorder.return_value = mock_recorder_instance
 
         mock_transcriber_instance = MagicMock()
-        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber_instance.transcribe.return_value = ("テスト音声", 1.23)
         mock_transcriber.return_value = mock_transcriber_instance
 
         mock_postprocessor_instance = MagicMock()
-        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor_instance.process.return_value = ("processed text", 0.45)
         mock_postprocessor.return_value = mock_postprocessor_instance
 
         mock_controller_instance = MagicMock()
@@ -605,11 +605,11 @@ class TestVoiceCodeAppStopAndProcess:
         mock_recorder.return_value = mock_recorder_instance
 
         mock_transcriber_instance = MagicMock()
-        mock_transcriber_instance.transcribe.return_value = "テスト音声"
+        mock_transcriber_instance.transcribe.return_value = ("テスト音声", 1.23)
         mock_transcriber.return_value = mock_transcriber_instance
 
         mock_postprocessor_instance = MagicMock()
-        mock_postprocessor_instance.process.return_value = "processed text"
+        mock_postprocessor_instance.process.return_value = ("processed text", 0.45)
         mock_postprocessor.return_value = mock_postprocessor_instance
 
         mock_controller_instance = MagicMock()

@@ -394,6 +394,8 @@ class VoiceCodeApp(rumps.App):
         original_clipboard: str | None = None
         transcribed_text: str = ""
         processed_text: str = ""
+        transcription_time: float = 0.0
+        postprocess_time: float = 0.0
 
         try:
             audio_path = self._recorder.stop()
@@ -402,7 +404,7 @@ class VoiceCodeApp(rumps.App):
             print("-" * 50)
 
             # 文字起こし
-            transcribed_text = self._transcriber.transcribe(audio_path)
+            transcribed_text, transcription_time = self._transcriber.transcribe(audio_path)
 
             if not transcribed_text.strip():
                 print("[Warning] No speech detected")
@@ -411,7 +413,7 @@ class VoiceCodeApp(rumps.App):
                 return
 
             # LLM後処理
-            processed_text = self._postprocessor.process(transcribed_text)
+            processed_text, postprocess_time = self._postprocessor.process(transcribed_text)
 
             # クリップボード復元が有効な場合、元の内容を保存
             if self._settings.restore_clipboard:
@@ -432,6 +434,10 @@ class VoiceCodeApp(rumps.App):
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
             print("[Paste] Done!")
+
+            # 合計時間を表示
+            total_time = transcription_time + postprocess_time
+            print(f"[Total] {total_time:.2f}s")
 
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():
