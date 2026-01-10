@@ -172,6 +172,12 @@ SYSTEM_PROMPT = """<instructions>
 <output>各ステップの処理時間を表示する</output>
 <explanation>「書く＋名詞」の形で「各〜」の意味なら「各」が正しい</explanation>
 </example>
+
+<example name="同音異義語修正（.env/演武）">
+<input>演武ファイルの使い方について説明してください</input>
+<output>.envファイルの使い方について説明してください。</output>
+<explanation>プログラミング文脈で「ファイル」と組み合わせなら環境変数ファイル「.env」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
@@ -327,8 +333,6 @@ class PostProcessor:
         """
         if not text.strip():
             return "", 0.0
-
-        print(f"[PostProcess] Input: {text}")
 
         start_time = time.time()
 
