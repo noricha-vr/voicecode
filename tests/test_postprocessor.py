@@ -1,5 +1,6 @@
 """LLM後処理機能のテスト。"""
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -200,6 +201,26 @@ class TestPostProcessor:
 
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert "ユーザー辞書" in call_kwargs["messages"][0]["content"]
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary", return_value="")
+    def test_process_logs_result_with_gemini_label(self, mock_load_dict, mock_openai_class, caplog):
+        """処理結果が[Gemini]ラベルでログ出力されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="React"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+
+        with caplog.at_level(logging.INFO, logger="postprocessor"):
+            result, elapsed = processor.process("リアクト")
+
+        # ログに[Gemini]ラベルが含まれることを確認
+        assert any("[Gemini]" in record.message for record in caplog.records)
+        assert any("React" in record.message for record in caplog.records)
 
 
 class TestLoadUserDictionary:

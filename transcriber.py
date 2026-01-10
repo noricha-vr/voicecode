@@ -3,11 +3,14 @@
 Groq APIのWhisperモデルを使用して音声を文字起こしする。
 """
 
+import logging
 import os
 import time
 from pathlib import Path
 
 from groq import Groq
+
+logger = logging.getLogger(__name__)
 
 
 class Transcriber:
@@ -48,8 +51,6 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-        print(f"[Transcription] Processing: {audio_path}")
-
         start_time = time.time()
 
         with open(audio_path, "rb") as audio_file:
@@ -63,5 +64,5 @@ class Transcriber:
         elapsed = time.time() - start_time
 
         result = transcription.strip() if isinstance(transcription, str) else str(transcription).strip()
-        print(f"[Transcription] Result: {result} ({elapsed:.2f}s)")
+        logger.info(f"[Whisper] {result} ({elapsed:.2f}s)")
         return result, elapsed

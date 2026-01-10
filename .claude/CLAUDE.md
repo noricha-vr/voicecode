@@ -41,7 +41,7 @@ launchctl load ~/Library/LaunchAgents/com.voicecode.plist
 launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
 
 # ログ確認
-tail -f /tmp/voicecode.log
+tail -f ~/.voicecode/voicecode.log
 
 # ビルド（シェルラッパー版 - 個人利用向け）
 ./scripts/build_app.sh

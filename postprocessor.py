@@ -3,12 +3,15 @@
 Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
 """
 
+import logging
 import os
 import re
 import time
 from pathlib import Path
 
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """<instructions>
@@ -352,5 +355,5 @@ class PostProcessor:
         result = re.sub(r'^<output>\s*', '', result)
         result = re.sub(r'\s*</output>$', '', result)
 
-        print(f"[PostProcess] Output: {result} ({elapsed:.2f}s)")
+        logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
         return result, elapsed

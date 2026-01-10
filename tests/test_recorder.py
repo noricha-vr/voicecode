@@ -20,7 +20,7 @@ class TestRecordingConfig:
         assert config.sample_rate == 16000
         assert config.channels == 1
         assert config.dtype == "int16"
-        assert config.max_duration == 60
+        assert config.max_duration == 120
 
     def test_custom_values(self):
         """カスタム値を設定できること。"""
@@ -41,7 +41,7 @@ class TestAudioRecorder:
         assert recorder.config.channels == 1
         assert not recorder.is_recording
         assert not recorder.is_timeout
-        assert recorder._max_duration == 60
+        assert recorder._max_duration == 120
 
     def test_init_custom_config(self):
         """カスタム設定で初期化できること。"""

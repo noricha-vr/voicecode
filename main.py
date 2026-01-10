@@ -26,17 +26,33 @@ from pynput import keyboard
 from history import HistoryManager
 from overlay import RecordingOverlay
 from postprocessor import PostProcessor
-from recorder import AudioRecorder
+from recorder import AudioRecorder, RecordingConfig
 from settings import Settings
 from transcriber import Transcriber
 
-# デバッグ用ログ設定
-logging.basicConfig(
-    filename='/tmp/voicecode_debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# ログ設定
 logger = logging.getLogger(__name__)
+
+# ログディレクトリを作成
+log_dir = Path.home() / ".voicecode"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / "voicecode.log"
+
+# コンソール出力用のハンドラを設定（各モジュールのlogger.infoを表示）
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(message)s'))
+
+# ファイル出力用のハンドラ（デバッグ用）
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# ルートロガーに両方のハンドラを追加
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(console_handler)
+root_logger.addHandler(file_handler)
 
 
 def _ensure_api_keys(env_path: Path) -> None:
@@ -213,7 +229,10 @@ class VoiceCodeApp(rumps.App):
         self._settings = Settings()
 
         self._hotkey = _parse_hotkey(self._settings.hotkey)
-        self._recorder = AudioRecorder()
+        recording_config = RecordingConfig(
+            max_duration=self._settings.max_recording_duration
+        )
+        self._recorder = AudioRecorder(config=recording_config)
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
         self._history_manager = HistoryManager()
@@ -424,7 +443,6 @@ class VoiceCodeApp(rumps.App):
 
             # クリップボードにコピー
             pyperclip.copy(processed_text)
-            print(f"\n[Clipboard] Copied: {processed_text}")
 
             # 少し待機してから貼り付け
             time.sleep(0.2)
@@ -433,7 +451,6 @@ class VoiceCodeApp(rumps.App):
             controller = keyboard.Controller()
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
-            print("[Paste] Done!")
 
             # 合計時間を表示
             total_time = transcription_time + postprocess_time

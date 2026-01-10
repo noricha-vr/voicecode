@@ -27,7 +27,7 @@ class RecordingConfig:
     sample_rate: int = 16000
     channels: int = 1
     dtype: str = "int16"
-    max_duration: int = 60
+    max_duration: int = 120
 
 
 class AudioRecorder:

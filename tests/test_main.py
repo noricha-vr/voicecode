@@ -1,5 +1,6 @@
 """main.pyのホットキー関連機能のテスト。"""
 
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -630,7 +631,6 @@ class TestVoiceCodeAppStopAndProcess:
         # Assert - 処理が完了していること
         mock_copy.assert_called()
         mock_controller_instance.tap.assert_called_once_with('v')
-
 
 class TestVoiceCodeAppCheckTimeout:
     """VoiceCodeAppの_check_timeoutメソッドのテスト。"""
