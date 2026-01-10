@@ -13,6 +13,7 @@ if sys.platform != "darwin":
     sys.exit(1)
 
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -36,6 +37,59 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _ensure_api_keys(env_path: Path) -> None:
+    """API キーが設定されていない場合、入力を求めて .env に保存する。
+
+    Args:
+        env_path: .env ファイルのパス
+
+    Raises:
+        SystemExit: ユーザーが API キーを入力しなかった場合
+    """
+    keys_to_check = [
+        ("GROQ_API_KEY", "Groq API キー"),
+        ("OPENROUTER_API_KEY", "OpenRouter API キー"),
+    ]
+
+    updated = False
+    env_content: dict[str, str] = {}
+
+    # 既存の .env を読み込む
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    env_content[key.strip()] = value.strip()
+
+    for key, label in keys_to_check:
+        if not os.environ.get(key):
+            print(f"\n{label} が設定されていません。")
+            try:
+                value = input(f"{label} を入力してください: ").strip()
+            except EOFError:
+                # 非対話的環境（GUI起動時など）
+                print(f"[Error] {label} が必要です。終了します。")
+                sys.exit(1)
+
+            if not value:
+                print("API キーは必須です。終了します。")
+                sys.exit(1)
+
+            os.environ[key] = value
+            env_content[key] = value
+            updated = True
+
+    # 更新があれば .env に保存
+    if updated:
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(env_path, "w", encoding="utf-8") as f:
+            for key, value in env_content.items():
+                f.write(f"{key}={value}\n")
+        print(f"\nAPI キーを {env_path} に保存しました。")
 
 
 def _parse_hotkey(hotkey_str: str) -> set[keyboard.Key | keyboard.KeyCode]:
@@ -147,7 +201,13 @@ class VoiceCodeApp(rumps.App):
     def __init__(self):
         """VoiceCodeAppを初期化する。"""
         super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
-        load_dotenv()
+        config_dir = Path.home() / ".voicecode"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        env_path = config_dir / ".env"
+        load_dotenv(env_path)
+
+        # API キーが設定されていない場合、入力を求める
+        _ensure_api_keys(env_path)
 
         # 設定を読み込み（settings.json から、なければデフォルト値）
         self._settings = Settings()
