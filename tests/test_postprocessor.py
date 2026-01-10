@@ -1,5 +1,6 @@
 """LLM後処理機能のテスト。"""
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -38,17 +39,19 @@ class TestPostProcessor:
 
     @patch("postprocessor.OpenAI")
     def test_process_empty_string(self, mock_openai_class):
-        """空文字列の場合に空文字列が返されること。"""
+        """空文字列の場合に空文字列と0秒が返されること。"""
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("")
+        result, elapsed = processor.process("")
         assert result == ""
+        assert elapsed == 0.0
 
     @patch("postprocessor.OpenAI")
     def test_process_whitespace_only(self, mock_openai_class):
-        """空白のみの場合に空文字列が返されること。"""
+        """空白のみの場合に空文字列と0秒が返されること。"""
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("   \n\t  ")
+        result, elapsed = processor.process("   \n\t  ")
         assert result == ""
+        assert elapsed == 0.0
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary", return_value="")
@@ -62,9 +65,11 @@ class TestPostProcessor:
         mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("リアクト")
+        result, elapsed = processor.process("リアクト")
 
         assert result == "React"
+        assert isinstance(elapsed, float)
+        assert elapsed >= 0
         mock_client.chat.completions.create.assert_called_once()
 
         # 呼び出し引数を検証
@@ -86,9 +91,10 @@ class TestPostProcessor:
         mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("リアクト")
+        result, elapsed = processor.process("リアクト")
 
         assert result == "React"
+        assert isinstance(elapsed, float)
 
     @patch("postprocessor.OpenAI")
     def test_process_removes_output_xml_tags(self, mock_openai_class):
@@ -101,9 +107,10 @@ class TestPostProcessor:
         mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("テスト")
+        result, elapsed = processor.process("テスト")
 
         assert result == "テスト"
+        assert isinstance(elapsed, float)
 
     @patch("postprocessor.OpenAI")
     def test_process_without_xml_tags(self, mock_openai_class):
@@ -116,9 +123,10 @@ class TestPostProcessor:
         mock_client.chat.completions.create.return_value = mock_response
 
         processor = PostProcessor(api_key="test_key")
-        result = processor.process("テスト")
+        result, elapsed = processor.process("テスト")
 
         assert result == "テスト"
+        assert isinstance(elapsed, float)
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
@@ -193,6 +201,26 @@ class TestPostProcessor:
 
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert "ユーザー辞書" in call_kwargs["messages"][0]["content"]
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary", return_value="")
+    def test_process_logs_result_with_gemini_label(self, mock_load_dict, mock_openai_class, caplog):
+        """処理結果が[Gemini]ラベルでログ出力されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="React"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+
+        with caplog.at_level(logging.INFO, logger="postprocessor"):
+            result, elapsed = processor.process("リアクト")
+
+        # ログに[Gemini]ラベルが含まれることを確認
+        assert any("[Gemini]" in record.message for record in caplog.records)
+        assert any("React" in record.message for record in caplog.records)
 
 
 class TestLoadUserDictionary:

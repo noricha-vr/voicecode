@@ -41,8 +41,16 @@ launchctl load ~/Library/LaunchAgents/com.voicecode.plist
 launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
 
 # ログ確認
-tail -f /tmp/voicecode.log
+tail -f ~/.voicecode/voicecode.log
+
+# ビルド（シェルラッパー版 - 個人利用向け）
+./scripts/build_app.sh
+
+# ビルド（py2app版 - 配布向け）
+uv run python setup_py2app.py py2app
 ```
+
+詳細なビルド手順は `docs/build.md` を参照。
 
 ## 環境変数
 
@@ -103,3 +111,9 @@ PyObjC（低レベルAPI）→ rumps で足りない部分を補完
 - アクセシビリティ（ターミナル）
 - 入力監視（ターミナル）
 - マイク（ターミナル）
+
+## スキル/コマンド
+
+| 名前 | 種類 | 用途 |
+|------|------|------|
+| fix-voice | Skill + Command | 音声認識の誤変換をユーザー辞書または同音異義語に登録 |

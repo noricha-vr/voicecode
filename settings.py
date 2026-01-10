@@ -17,6 +17,11 @@ class Settings:
     # デフォルト設定
     DEFAULT_HOTKEY = "f15"
     DEFAULT_RESTORE_CLIPBOARD = True
+    DEFAULT_MAX_RECORDING_DURATION = 120
+
+    # 最大録音時間の範囲制限
+    MIN_RECORDING_DURATION = 10
+    MAX_RECORDING_DURATION = 300
 
     def __init__(self, config_dir: Path | None = None):
         """Settings を初期化する。
@@ -32,6 +37,7 @@ class Settings:
 
         self._hotkey: str = self.DEFAULT_HOTKEY
         self._restore_clipboard: bool = self.DEFAULT_RESTORE_CLIPBOARD
+        self._max_recording_duration: int = self.DEFAULT_MAX_RECORDING_DURATION
 
         self.load()
 
@@ -55,6 +61,22 @@ class Settings:
         """クリップボード復元設定を更新する。"""
         self._restore_clipboard = value
 
+    @property
+    def max_recording_duration(self) -> int:
+        """最大録音時間（秒）を取得する。"""
+        return self._max_recording_duration
+
+    @max_recording_duration.setter
+    def max_recording_duration(self, value: int) -> None:
+        """最大録音時間（秒）を更新する。
+
+        値は MIN_RECORDING_DURATION から MAX_RECORDING_DURATION の範囲に制限される。
+        """
+        self._max_recording_duration = max(
+            self.MIN_RECORDING_DURATION,
+            min(value, self.MAX_RECORDING_DURATION)
+        )
+
     def load(self) -> None:
         """設定ファイルから設定を読み込む。
 
@@ -73,6 +95,9 @@ class Settings:
             if "restore_clipboard" in data and isinstance(data["restore_clipboard"], bool):
                 self._restore_clipboard = data["restore_clipboard"]
 
+            if "max_recording_duration" in data and isinstance(data["max_recording_duration"], int):
+                self.max_recording_duration = data["max_recording_duration"]
+
         except (json.JSONDecodeError, OSError) as e:
             print(f"[Warning] Failed to load settings: {e}")
 
@@ -87,6 +112,7 @@ class Settings:
         data = {
             "hotkey": self._hotkey,
             "restore_clipboard": self._restore_clipboard,
+            "max_recording_duration": self._max_recording_duration,
         }
 
         try:
@@ -100,4 +126,5 @@ class Settings:
         return {
             "hotkey": self._hotkey,
             "restore_clipboard": self._restore_clipboard,
+            "max_recording_duration": self._max_recording_duration,
         }

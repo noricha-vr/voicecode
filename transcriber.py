@@ -3,10 +3,14 @@
 Groq APIのWhisperモデルを使用して音声を文字起こしする。
 """
 
+import logging
 import os
+import time
 from pathlib import Path
 
 from groq import Groq
+
+logger = logging.getLogger(__name__)
 
 
 class Transcriber:
@@ -32,14 +36,14 @@ class Transcriber:
 
         self._client = Groq(api_key=self._api_key)
 
-    def transcribe(self, audio_path: Path) -> str:
+    def transcribe(self, audio_path: Path) -> tuple[str, float]:
         """音声ファイルを文字起こしする。
 
         Args:
             audio_path: 音声ファイルのパス。
 
         Returns:
-            文字起こし結果のテキスト。
+            文字起こし結果のテキストと処理時間（秒）のタプル。
 
         Raises:
             FileNotFoundError: 音声ファイルが存在しない場合。
@@ -47,7 +51,7 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-        print(f"[Transcription] Processing: {audio_path}")
+        start_time = time.time()
 
         with open(audio_path, "rb") as audio_file:
             transcription = self._client.audio.transcriptions.create(
@@ -57,6 +61,8 @@ class Transcriber:
                 response_format="text",
             )
 
+        elapsed = time.time() - start_time
+
         result = transcription.strip() if isinstance(transcription, str) else str(transcription).strip()
-        print(f"[Transcription] Result: {result}")
-        return result
+        logger.info(f"[Whisper] {result} ({elapsed:.2f}s)")
+        return result, elapsed

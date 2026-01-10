@@ -20,7 +20,7 @@ class TestRecordingConfig:
         assert config.sample_rate == 16000
         assert config.channels == 1
         assert config.dtype == "int16"
-        assert config.max_duration == 60
+        assert config.max_duration == 120
 
     def test_custom_values(self):
         """カスタム値を設定できること。"""
@@ -41,7 +41,7 @@ class TestAudioRecorder:
         assert recorder.config.channels == 1
         assert not recorder.is_recording
         assert not recorder.is_timeout
-        assert recorder._max_duration == 60
+        assert recorder._max_duration == 120
 
     def test_init_custom_config(self):
         """カスタム設定で初期化できること。"""
@@ -223,3 +223,30 @@ class TestAudioRecorderTimeout:
             callback(indata, 1000, {}, None)
 
         assert recorder.is_timeout
+
+    @patch("recorder.sd.InputStream")
+    def test_stop_resets_timeout_flag(self, mock_stream_class):
+        """stop()がtimeoutフラグをリセットすること。
+
+        タイムアウトで録音が停止した後、is_timeoutがFalseにリセットされることを確認。
+        これにより、_check_timeout()が繰り返し_stop_and_process()を呼び出すバグを防止。
+        """
+        mock_stream = MagicMock()
+        mock_stream_class.return_value = mock_stream
+
+        recorder = AudioRecorder()
+        recorder.start()
+
+        # タイムアウトが発生した状態をシミュレート
+        recorder._timeout_reached = True
+        recorder._frames = [np.zeros((1000,), dtype=np.int16)]
+
+        # stop()を呼び出す
+        result = recorder.stop()
+
+        # タイムアウトフラグがリセットされていること
+        assert not recorder.is_timeout
+        assert not recorder.is_recording
+
+        # クリーンアップ
+        result.unlink()

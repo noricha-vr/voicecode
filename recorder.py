@@ -27,7 +27,7 @@ class RecordingConfig:
     sample_rate: int = 16000
     channels: int = 1
     dtype: str = "int16"
-    max_duration: int = 60
+    max_duration: int = 120
 
 
 class AudioRecorder:
@@ -116,6 +116,7 @@ class AudioRecorder:
             self._stream = None
 
         self._is_recording = False
+        self._timeout_reached = False
         print("[Recording] Stopped.")
 
         return self._save_to_file()

@@ -1,5 +1,6 @@
 """文字起こし機能のテスト。"""
 
+import logging
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -54,8 +55,10 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result = transcriber.transcribe(temp_path)
+            result, elapsed = transcriber.transcribe(temp_path)
             assert result == "テスト結果"
+            assert isinstance(elapsed, float)
+            assert elapsed >= 0
             mock_client.audio.transcriptions.create.assert_called_once()
         finally:
             temp_path.unlink()
@@ -74,11 +77,35 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result = transcriber.transcribe(temp_path)
+            result, elapsed = transcriber.transcribe(temp_path)
             assert result == "結果"
+            assert isinstance(elapsed, float)
         finally:
             temp_path.unlink()
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
         assert Transcriber.MODEL == "whisper-large-v3-turbo"
+
+    @patch("transcriber.Groq")
+    def test_transcribe_logs_result_with_whisper_label(self, mock_groq_class, caplog):
+        """文字起こし結果が[Whisper]ラベルでログ出力されること。"""
+        mock_client = MagicMock()
+        mock_groq_class.return_value = mock_client
+        mock_client.audio.transcriptions.create.return_value = "テスト結果"
+
+        transcriber = Transcriber(api_key="test_key")
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(b"dummy audio data")
+            temp_path = Path(f.name)
+
+        try:
+            with caplog.at_level(logging.INFO, logger="transcriber"):
+                result, elapsed = transcriber.transcribe(temp_path)
+
+            # ログに[Whisper]ラベルが含まれることを確認
+            assert any("[Whisper]" in record.message for record in caplog.records)
+            assert any("テスト結果" in record.message for record in caplog.records)
+        finally:
+            temp_path.unlink()

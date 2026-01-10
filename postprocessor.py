@@ -3,11 +3,15 @@
 Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
 """
 
+import logging
 import os
 import re
+import time
 from pathlib import Path
 
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """<instructions>
@@ -165,6 +169,18 @@ SYSTEM_PROMPT = """<instructions>
 <output>このライブラリを使用する</output>
 <explanation>「〜を○○する」の形で動詞として使われているなら「使用」が正しい</explanation>
 </example>
+
+<example name="同音異義語修正（各/書く）">
+<input>書くステップの処理時間を表示する</input>
+<output>各ステップの処理時間を表示する</output>
+<explanation>「書く＋名詞」の形で「各〜」の意味なら「各」が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（.env/演武）">
+<input>演武ファイルの使い方について説明してください</input>
+<output>.envファイルの使い方について説明してください。</output>
+<explanation>プログラミング文脈で「ファイル」と組み合わせなら環境変数ファイル「.env」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
@@ -309,19 +325,19 @@ class PostProcessor:
         else:
             self._system_prompt = SYSTEM_PROMPT
 
-    def process(self, text: str) -> str:
+    def process(self, text: str) -> tuple[str, float]:
         """テキストをLLMで後処理する。
 
         Args:
             text: 音声認識結果のテキスト。
 
         Returns:
-            修正後のテキスト。
+            修正後のテキストと処理時間（秒）のタプル。
         """
         if not text.strip():
-            return ""
+            return "", 0.0
 
-        print(f"[PostProcess] Input: {text}")
+        start_time = time.time()
 
         response = self._client.chat.completions.create(
             model=self.MODEL,
@@ -331,11 +347,13 @@ class PostProcessor:
             ],
         )
 
+        elapsed = time.time() - start_time
+
         result = response.choices[0].message.content.strip()
 
         # LLMが出力に付けるXMLタグを除去
         result = re.sub(r'^<output>\s*', '', result)
         result = re.sub(r'\s*</output>$', '', result)
 
-        print(f"[PostProcess] Output: {result}")
-        return result
+        logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
+        return result, elapsed

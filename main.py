@@ -13,6 +13,7 @@ if sys.platform != "darwin":
     sys.exit(1)
 
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -25,17 +26,86 @@ from pynput import keyboard
 from history import HistoryManager
 from overlay import RecordingOverlay
 from postprocessor import PostProcessor
-from recorder import AudioRecorder
+from recorder import AudioRecorder, RecordingConfig
 from settings import Settings
 from transcriber import Transcriber
 
-# デバッグ用ログ設定
-logging.basicConfig(
-    filename='/tmp/voicecode_debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# ログ設定
 logger = logging.getLogger(__name__)
+
+# ログディレクトリを作成
+log_dir = Path.home() / ".voicecode"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / "voicecode.log"
+
+# コンソール出力用のハンドラを設定（各モジュールのlogger.infoを表示）
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(message)s'))
+
+# ファイル出力用のハンドラ（デバッグ用）
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# ルートロガーに両方のハンドラを追加
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(console_handler)
+root_logger.addHandler(file_handler)
+
+
+def _ensure_api_keys(env_path: Path) -> None:
+    """API キーが設定されていない場合、入力を求めて .env に保存する。
+
+    Args:
+        env_path: .env ファイルのパス
+
+    Raises:
+        SystemExit: ユーザーが API キーを入力しなかった場合
+    """
+    keys_to_check = [
+        ("GROQ_API_KEY", "Groq API キー"),
+        ("OPENROUTER_API_KEY", "OpenRouter API キー"),
+    ]
+
+    updated = False
+    env_content: dict[str, str] = {}
+
+    # 既存の .env を読み込む
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    env_content[key.strip()] = value.strip()
+
+    for key, label in keys_to_check:
+        if not os.environ.get(key):
+            print(f"\n{label} が設定されていません。")
+            try:
+                value = input(f"{label} を入力してください: ").strip()
+            except EOFError:
+                # 非対話的環境（GUI起動時など）
+                print(f"[Error] {label} が必要です。終了します。")
+                sys.exit(1)
+
+            if not value:
+                print("API キーは必須です。終了します。")
+                sys.exit(1)
+
+            os.environ[key] = value
+            env_content[key] = value
+            updated = True
+
+    # 更新があれば .env に保存
+    if updated:
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(env_path, "w", encoding="utf-8") as f:
+            for key, value in env_content.items():
+                f.write(f"{key}={value}\n")
+        print(f"\nAPI キーを {env_path} に保存しました。")
 
 
 def _parse_hotkey(hotkey_str: str) -> set[keyboard.Key | keyboard.KeyCode]:
@@ -147,13 +217,22 @@ class VoiceCodeApp(rumps.App):
     def __init__(self):
         """VoiceCodeAppを初期化する。"""
         super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
-        load_dotenv()
+        config_dir = Path.home() / ".voicecode"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        env_path = config_dir / ".env"
+        load_dotenv(env_path)
+
+        # API キーが設定されていない場合、入力を求める
+        _ensure_api_keys(env_path)
 
         # 設定を読み込み（settings.json から、なければデフォルト値）
         self._settings = Settings()
 
         self._hotkey = _parse_hotkey(self._settings.hotkey)
-        self._recorder = AudioRecorder()
+        recording_config = RecordingConfig(
+            max_duration=self._settings.max_recording_duration
+        )
+        self._recorder = AudioRecorder(config=recording_config)
         self._transcriber = Transcriber()
         self._postprocessor = PostProcessor()
         self._history_manager = HistoryManager()
@@ -258,7 +337,7 @@ class VoiceCodeApp(rumps.App):
 
     def _check_timeout(self, _) -> None:
         """録音タイムアウトをチェックする。"""
-        if self._recorder.is_timeout and not self._processing:
+        if self._recorder.is_recording and self._recorder.is_timeout and not self._processing:
             print("\n[Timeout] Max recording duration reached")
             self._stop_and_process()
 
@@ -334,6 +413,8 @@ class VoiceCodeApp(rumps.App):
         original_clipboard: str | None = None
         transcribed_text: str = ""
         processed_text: str = ""
+        transcription_time: float = 0.0
+        postprocess_time: float = 0.0
 
         try:
             audio_path = self._recorder.stop()
@@ -342,7 +423,7 @@ class VoiceCodeApp(rumps.App):
             print("-" * 50)
 
             # 文字起こし
-            transcribed_text = self._transcriber.transcribe(audio_path)
+            transcribed_text, transcription_time = self._transcriber.transcribe(audio_path)
 
             if not transcribed_text.strip():
                 print("[Warning] No speech detected")
@@ -351,7 +432,7 @@ class VoiceCodeApp(rumps.App):
                 return
 
             # LLM後処理
-            processed_text = self._postprocessor.process(transcribed_text)
+            processed_text, postprocess_time = self._postprocessor.process(transcribed_text)
 
             # クリップボード復元が有効な場合、元の内容を保存
             if self._settings.restore_clipboard:
@@ -362,7 +443,6 @@ class VoiceCodeApp(rumps.App):
 
             # クリップボードにコピー
             pyperclip.copy(processed_text)
-            print(f"\n[Clipboard] Copied: {processed_text}")
 
             # 少し待機してから貼り付け
             time.sleep(0.2)
@@ -371,7 +451,10 @@ class VoiceCodeApp(rumps.App):
             controller = keyboard.Controller()
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
-            print("[Paste] Done!")
+
+            # 合計時間を表示
+            total_time = transcription_time + postprocess_time
+            print(f"[Total] {total_time:.2f}s")
 
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():
