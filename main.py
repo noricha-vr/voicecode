@@ -318,7 +318,7 @@ class VoiceCodeApp(rumps.App):
 
     def _check_timeout(self, _) -> None:
         """録音タイムアウトをチェックする。"""
-        if self._recorder.is_timeout and not self._processing:
+        if self._recorder.is_recording and self._recorder.is_timeout and not self._processing:
             print("\n[Timeout] Max recording duration reached")
             self._stop_and_process()
 

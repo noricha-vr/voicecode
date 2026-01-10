@@ -630,3 +630,160 @@ class TestVoiceCodeAppStopAndProcess:
         # Assert - 処理が完了していること
         mock_copy.assert_called()
         mock_controller_instance.tap.assert_called_once_with('v')
+
+
+class TestVoiceCodeAppCheckTimeout:
+    """VoiceCodeAppの_check_timeoutメソッドのテスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_check_timeout_skips_when_not_recording(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """録音中でない場合、_check_timeoutはstop_and_processを呼ばないこと。
+
+        タイムアウト後にis_recordingがFalseになった場合、_check_timeoutが
+        繰り返し_stop_and_process()を呼び出すバグを防止するテスト。
+        """
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = False  # 録音中でない
+        mock_recorder_instance.is_timeout = True  # タイムアウトフラグが残っている
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        app._processing = False
+
+        # _stop_and_processをモック化
+        app._stop_and_process = MagicMock()
+
+        # Act
+        app._check_timeout(None)
+
+        # Assert
+        # 録音中でないため、_stop_and_processは呼ばれない
+        app._stop_and_process.assert_not_called()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_check_timeout_calls_stop_when_recording_and_timeout(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """録音中かつタイムアウトの場合、_stop_and_processが呼ばれること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True  # 録音中
+        mock_recorder_instance.is_timeout = True  # タイムアウト
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        app._processing = False
+
+        # _stop_and_processをモック化
+        app._stop_and_process = MagicMock()
+
+        # Act
+        app._check_timeout(None)
+
+        # Assert
+        app._stop_and_process.assert_called_once()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_check_timeout_skips_when_processing(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """処理中の場合、_check_timeoutはstop_and_processを呼ばないこと。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder_instance.is_timeout = True
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        app._processing = True  # 処理中
+
+        # _stop_and_processをモック化
+        app._stop_and_process = MagicMock()
+
+        # Act
+        app._check_timeout(None)
+
+        # Assert
+        app._stop_and_process.assert_not_called()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_check_timeout_skips_when_no_timeout(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """タイムアウトしていない場合、_stop_and_processは呼ばれないこと。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder_instance.is_timeout = False  # タイムアウトしていない
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        app._processing = False
+
+        # _stop_and_processをモック化
+        app._stop_and_process = MagicMock()
+
+        # Act
+        app._check_timeout(None)
+
+        # Assert
+        app._stop_and_process.assert_not_called()

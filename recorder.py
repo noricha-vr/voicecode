@@ -116,6 +116,7 @@ class AudioRecorder:
             self._stream = None
 
         self._is_recording = False
+        self._timeout_reached = False
         print("[Recording] Stopped.")
 
         return self._save_to_file()
