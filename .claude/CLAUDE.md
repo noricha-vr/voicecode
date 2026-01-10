@@ -42,7 +42,15 @@ launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
 
 # ログ確認
 tail -f /tmp/voicecode.log
+
+# ビルド（シェルラッパー版 - 個人利用向け）
+./scripts/build_app.sh
+
+# ビルド（py2app版 - 配布向け）
+uv run python setup_py2app.py py2app
 ```
+
+詳細なビルド手順は `docs/build.md` を参照。
 
 ## 環境変数
 
