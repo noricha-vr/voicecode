@@ -26,3 +26,6 @@ Thumbs.db
 # Temp
 *.wav
 *.mp3
+
+# py2app build artifacts
+*.dmg

@@ -27,6 +27,32 @@ cp com.voicecode.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.voicecode.plist
 ```
 
+## インストール方法
+
+### pipx（推奨）
+
+```bash
+# pipx をインストール（まだの場合）
+brew install pipx
+pipx ensurepath
+
+# VoiceCode をインストール
+pipx install git+https://github.com/noricha-vr/voicecode.git
+
+# 起動
+voicecode
+```
+
+### uv tool
+
+```bash
+# uv をインストール（まだの場合）
+brew install uv
+
+# VoiceCode を実行
+uv tool run --from git+https://github.com/noricha-vr/voicecode.git voicecode
+```
+
 ## セットアップ詳細
 
 ### 1. 依存関係のインストール
