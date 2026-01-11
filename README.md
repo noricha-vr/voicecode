@@ -1,5 +1,9 @@
 # voicecode
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
+
 macOS用の音声入力ツール。ホットキー1回で音声入力から文字起こし、LLM後処理、貼り付けまでを自動化する。
 
 ## 特徴
@@ -200,9 +204,12 @@ voicecode/
 ├── main.py           # エントリポイント、キーボード監視と統合処理
 ├── recorder.py       # 音声録音モジュール
 ├── transcriber.py    # Groq Whisper による文字起こし
-├── postprocessor.py  # Claude による後処理
-├── requirements.txt  # 依存関係
+├── postprocessor.py  # Gemini による後処理
+├── settings.py       # 設定管理
+├── pyproject.toml    # プロジェクト設定・依存関係
 ├── .env.example      # 環境変数テンプレート
+├── LICENSE           # MITライセンス
+├── CONTRIBUTING.md   # 貢献ガイド
 └── README.md
 ```
 

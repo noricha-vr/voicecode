@@ -4,6 +4,17 @@ version = "0.1.0"
 description = "macOS用の音声入力ツール。ホットキーで録音→文字起こし→LLM後処理→貼り付けを自動化"
 readme = "README.md"
 requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [{name = "noricha-vr"}]
+keywords = ["voice", "input", "speech-to-text", "macos", "programming", "transcription", "whisper"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 dependencies = [
     "pynput>=1.7.6",
     "sounddevice>=0.4.6",
@@ -14,6 +25,11 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "rumps>=0.4.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/noricha-vr/voicecode"
+Repository = "https://github.com/noricha-vr/voicecode"
+Issues = "https://github.com/noricha-vr/voicecode/issues"
 
 [project.scripts]
 voicecode = "main:main"
