@@ -26,7 +26,7 @@ from pynput import keyboard
 from history import HistoryManager
 from overlay import RecordingOverlay
 from postprocessor import PostProcessor
-from recorder import AudioRecorder, RecordingConfig
+from recorder import AudioRecorder, MicrophonePermissionError, RecordingConfig, check_microphone_permission
 from settings import Settings
 from transcriber import Transcriber
 
@@ -231,6 +231,9 @@ class VoiceCodeApp(rumps.App):
         # 起動時に設定内容をログ出力
         self._log_settings()
 
+        # マイク権限をチェック
+        self._check_microphone_permission()
+
         self._hotkey = _parse_hotkey(self._settings.hotkey)
         recording_config = RecordingConfig(
             max_duration=self._settings.max_recording_duration
@@ -304,6 +307,20 @@ class VoiceCodeApp(rumps.App):
         logger.info(f"[Settings] Max Recording: {self._settings.max_recording_duration}s")
         logger.info(f"[Settings] Restore Clipboard: {self._settings.restore_clipboard}")
         logger.info(f"[Settings] Push-to-Talk: {self._settings.push_to_talk}")
+
+    def _check_microphone_permission(self) -> None:
+        """起動時にマイク権限をチェックする。
+
+        権限がない場合は警告メッセージを表示するが、アプリは起動を続ける。
+        """
+        if not check_microphone_permission():
+            logger.warning("[Warning] Microphone permission not granted")
+            print("\n" + "=" * 60)
+            print("[Warning] マイク権限が許可されていません")
+            print("-" * 60)
+            print("システム設定 > プライバシーとセキュリティ > マイク で")
+            print("ターミナル（または VoiceCode.app）を許可してください。")
+            print("=" * 60 + "\n")
 
     def _init_menu(self) -> None:
         """メニュー項目を初期化する。"""
@@ -437,6 +454,16 @@ class VoiceCodeApp(rumps.App):
             print("\n" + "=" * 50)
             print(f"Recording... Press {hotkey_display} to stop")
             print("=" * 50)
+        except MicrophonePermissionError as e:
+            logger.error(f"Microphone permission error: {e}")
+            print("\n" + "=" * 60)
+            print("[Error] マイク権限が許可されていません")
+            print("-" * 60)
+            print("システム設定 > プライバシーとセキュリティ > マイク で")
+            print("ターミナル（または VoiceCode.app）を許可してください。")
+            print("=" * 60 + "\n")
+            self.icon = self._get_icon_path(self.ICON_IDLE)
+            self._play_sound(self.SOUND_ERROR)
         except Exception as e:
             print(f"[Error] Failed to start recording: {e}")
             self.icon = self._get_icon_path(self.ICON_IDLE)

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import sounddevice as sd
 
-from recorder import AudioRecorder, RecordingConfig
+from recorder import AudioRecorder, MicrophonePermissionError, RecordingConfig, check_microphone_permission
 
 
 class TestRecordingConfig:
@@ -250,3 +250,96 @@ class TestAudioRecorderTimeout:
 
         # クリーンアップ
         result.unlink()
+
+
+class TestMicrophonePermissionError:
+    """MicrophonePermissionErrorのテスト。"""
+
+    def test_default_message(self):
+        """デフォルトメッセージが設定されること。"""
+        error = MicrophonePermissionError()
+        assert "マイク権限が許可されていません" in str(error)
+        assert "システム設定" in str(error)
+
+    def test_custom_message(self):
+        """カスタムメッセージを設定できること。"""
+        custom_message = "カスタムエラーメッセージ"
+        error = MicrophonePermissionError(custom_message)
+        assert str(error) == custom_message
+
+    def test_exception_inheritance(self):
+        """Exceptionを継承していること。"""
+        error = MicrophonePermissionError()
+        assert isinstance(error, Exception)
+
+
+class TestAudioRecorderMicrophonePermission:
+    """AudioRecorderのマイク権限エラーハンドリングのテスト。"""
+
+    @patch("recorder.sd.InputStream")
+    def test_start_raises_microphone_permission_error_on_permission_denied(
+        self, mock_stream_class
+    ):
+        """マイク権限がない場合にMicrophonePermissionErrorが発生すること。"""
+        # PortAudioErrorをシミュレート
+        mock_stream_class.side_effect = sd.PortAudioError(
+            "Error opening InputStream: Permission denied"
+        )
+
+        recorder = AudioRecorder()
+
+        with pytest.raises(MicrophonePermissionError) as exc_info:
+            recorder.start()
+
+        # エラーメッセージを確認
+        assert "マイク権限が許可されていません" in str(exc_info.value)
+        # 録音状態がリセットされていること
+        assert not recorder.is_recording
+        assert recorder._start_time is None
+
+    @patch("recorder.sd.InputStream")
+    def test_start_reraises_other_portaudio_errors(self, mock_stream_class):
+        """マイク権限以外のPortAudioErrorはそのままraiseされること。"""
+        # 権限以外のエラーメッセージ
+        mock_stream_class.side_effect = sd.PortAudioError(
+            "Unanticipated host error"
+        )
+
+        recorder = AudioRecorder()
+
+        with pytest.raises(sd.PortAudioError):
+            recorder.start()
+
+        assert not recorder.is_recording
+
+
+class TestCheckMicrophonePermission:
+    """check_microphone_permission関数のテスト。"""
+
+    @patch("recorder.sd.rec")
+    def test_returns_true_when_permission_granted(self, mock_rec):
+        """マイク権限がある場合にTrueを返すこと。"""
+        mock_rec.return_value = np.zeros((1,), dtype=np.int16)
+
+        result = check_microphone_permission()
+
+        assert result is True
+        mock_rec.assert_called_once_with(1, samplerate=16000, channels=1, blocking=True)
+
+    @patch("recorder.sd.rec")
+    def test_returns_false_on_portaudio_error(self, mock_rec):
+        """PortAudioErrorが発生した場合にFalseを返すこと。"""
+        mock_rec.side_effect = sd.PortAudioError("Permission denied")
+
+        result = check_microphone_permission()
+
+        assert result is False
+
+    @patch("recorder.sd.rec")
+    def test_returns_false_on_unexpected_error(self, mock_rec):
+        """予期しないエラーが発生した場合にFalseを返すこと。"""
+        mock_rec.side_effect = RuntimeError("Unexpected error")
+
+        result = check_microphone_permission()
+
+        assert result is False

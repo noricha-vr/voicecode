@@ -11,6 +11,25 @@ from pynput import keyboard
 from main import VoiceCodeApp, _format_hotkey, _parse_hotkey
 
 
+# VoiceCodeApp のテストで常に必要なモック
+# API キーとマイク権限チェックをモック
+VOICECODE_APP_PATCHES = {
+    "GROQ_API_KEY": "test_groq_key",
+    "OPENROUTER_API_KEY": "test_openrouter_key",
+    "HOTKEY": "f15",
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_check_microphone_permission():
+    """check_microphone_permission をモックするフィクスチャ。
+
+    autouse=True により、このモジュール内の全テストで自動的に適用される。
+    """
+    with patch("main.check_microphone_permission", return_value=True):
+        yield
+
+
 class TestParseHotkey:
     """_parse_hotkey関数のテスト。"""
 
@@ -217,7 +236,7 @@ class TestVoiceCodeAppPlaySound:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_play_sound_calls_afplay(
         self,
         mock_load_dotenv,
@@ -245,7 +264,7 @@ class TestVoiceCodeAppPlaySound:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_play_sound_runs_async(
         self,
         mock_load_dotenv,
@@ -274,7 +293,7 @@ class TestVoiceCodeAppInitialization:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_init_sets_idle_icon(
         self,
         mock_load_dotenv,
@@ -300,7 +319,7 @@ class TestVoiceCodeAppInitialization:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_init_starts_keyboard_listener(
         self,
         mock_load_dotenv,
@@ -322,7 +341,7 @@ class TestVoiceCodeAppInitialization:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_init_starts_timeout_timer(
         self,
         mock_load_dotenv,
@@ -352,7 +371,7 @@ class TestVoiceCodeAppStopAndProcess:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_stop_and_process_uses_pynput_for_paste(
         self,
         mock_load_dotenv,
@@ -412,7 +431,7 @@ class TestVoiceCodeAppStopAndProcess:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_stop_and_process_copies_to_clipboard_before_paste(
         self,
         mock_load_dotenv,
@@ -475,7 +494,7 @@ class TestVoiceCodeAppStopAndProcess:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_stop_and_process_no_restore_when_disabled(
         self,
         mock_load_dotenv,
@@ -538,7 +557,7 @@ class TestVoiceCodeAppStopAndProcess:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_stop_and_process_saves_history(
         self,
         mock_load_dotenv,
@@ -605,7 +624,7 @@ class TestVoiceCodeAppStopAndProcess:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_stop_and_process_continues_on_history_error(
         self,
         mock_load_dotenv,
@@ -668,7 +687,7 @@ class TestVoiceCodeAppKeyRepeatPrevention:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_key_repeat_ignored(
         self,
         mock_load_dotenv,
@@ -708,7 +727,7 @@ class TestVoiceCodeAppKeyRepeatPrevention:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_key_release_allows_new_press(
         self,
         mock_load_dotenv,
@@ -751,7 +770,7 @@ class TestVoiceCodeAppPushToTalk:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_push_to_talk_stops_on_release(
         self,
         mock_load_dotenv,
@@ -791,7 +810,7 @@ class TestVoiceCodeAppPushToTalk:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_toggle_mode_continues_on_release(
         self,
         mock_load_dotenv,
@@ -831,7 +850,7 @@ class TestVoiceCodeAppPushToTalk:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_push_to_talk_no_stop_when_not_recording(
         self,
         mock_load_dotenv,
@@ -875,7 +894,7 @@ class TestVoiceCodeAppLogSettings:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_log_settings_outputs_all_settings(
         self,
         mock_load_dotenv,
@@ -910,7 +929,7 @@ class TestVoiceCodeAppLogSettings:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_log_settings_hotkey_uppercase(
         self,
         mock_load_dotenv,
@@ -939,7 +958,7 @@ class TestVoiceCodeAppLogSettings:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_log_settings_restore_clipboard_false(
         self,
         mock_load_dotenv,
@@ -967,7 +986,7 @@ class TestVoiceCodeAppLogSettings:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_log_settings_push_to_talk_true(
         self,
         mock_load_dotenv,
@@ -999,7 +1018,7 @@ class TestVoiceCodeAppCheckTimeout:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_check_timeout_skips_when_not_recording(
         self,
         mock_load_dotenv,
@@ -1041,7 +1060,7 @@ class TestVoiceCodeAppCheckTimeout:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_check_timeout_calls_stop_when_recording_and_timeout(
         self,
         mock_load_dotenv,
@@ -1078,7 +1097,7 @@ class TestVoiceCodeAppCheckTimeout:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_check_timeout_skips_when_processing(
         self,
         mock_load_dotenv,
@@ -1115,7 +1134,7 @@ class TestVoiceCodeAppCheckTimeout:
     @patch("main.PostProcessor")
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
-    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
     def test_check_timeout_skips_when_no_timeout(
         self,
         mock_load_dotenv,

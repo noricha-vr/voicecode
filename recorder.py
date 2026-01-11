@@ -3,6 +3,7 @@
 マイクから音声をキャプチャし、一時ファイルに保存する。
 """
 
+import logging
 import tempfile
 import time
 import wave
@@ -11,6 +12,30 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+
+
+logger = logging.getLogger(__name__)
+
+
+class MicrophonePermissionError(Exception):
+    """マイク権限エラー。
+
+    macOS のマイク権限が許可されていない場合に発生する。
+    """
+
+    def __init__(self, message: str | None = None):
+        """MicrophonePermissionError を初期化する。
+
+        Args:
+            message: エラーメッセージ。None の場合はデフォルトメッセージを使用。
+        """
+        if message is None:
+            message = (
+                "マイク権限が許可されていません。\n"
+                "システム設定 > プライバシーとセキュリティ > マイク で\n"
+                "ターミナル（または VoiceCode.app）を許可してください。"
+            )
+        super().__init__(message)
 
 
 @dataclass
@@ -65,6 +90,7 @@ class AudioRecorder:
 
         Raises:
             RuntimeError: 既に録音中の場合。
+            MicrophonePermissionError: マイク権限が許可されていない場合。
         """
         if self._is_recording:
             raise RuntimeError("Already recording")
@@ -89,13 +115,26 @@ class AudioRecorder:
 
             self._frames.append(indata.copy())
 
-        self._stream = sd.InputStream(
-            samplerate=self.config.sample_rate,
-            channels=self.config.channels,
-            dtype=self.config.dtype,
-            callback=callback,
-        )
-        self._stream.start()
+        try:
+            self._stream = sd.InputStream(
+                samplerate=self.config.sample_rate,
+                channels=self.config.channels,
+                dtype=self.config.dtype,
+                callback=callback,
+            )
+            self._stream.start()
+        except sd.PortAudioError as e:
+            self._is_recording = False
+            self._start_time = None
+            error_str = str(e).lower()
+            # マイク権限エラーの検出パターン
+            # 注: "input" は InputStream の全エラーに含まれるため除外
+            if "permission" in error_str or "denied" in error_str:
+                logger.error(f"Microphone permission error: {e}")
+                raise MicrophonePermissionError() from e
+            # その他の PortAudioError は再 raise
+            logger.error(f"PortAudio error: {e}")
+            raise
         print("[Recording] Started...")
 
     def stop(self) -> Path:
@@ -147,3 +186,23 @@ class AudioRecorder:
 
         print(f"[Recording] Saved to: {temp_path}")
         return temp_path
+
+
+def check_microphone_permission() -> bool:
+    """マイク権限をチェックする。
+
+    短時間の録音テストを実行してマイク権限を確認する。
+
+    Returns:
+        マイク権限が許可されている場合は True、そうでなければ False。
+    """
+    try:
+        # 非常に短い録音テストで権限を確認（1サンプルのみ）
+        sd.rec(1, samplerate=16000, channels=1, blocking=True)
+        return True
+    except sd.PortAudioError as e:
+        logger.warning(f"Microphone permission check failed: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Unexpected error during microphone check: {e}")
+        return False
