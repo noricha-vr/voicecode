@@ -172,10 +172,10 @@ class TestVoiceCodeAppConstants:
     """VoiceCodeAppの定数テスト。"""
 
     def test_icon_constants(self):
-        """状態アイコン定数が正しいこと。"""
-        assert VoiceCodeApp.ICON_IDLE == "■"
-        assert VoiceCodeApp.ICON_RECORDING == "●"
-        assert VoiceCodeApp.ICON_PROCESSING == "↻"
+        """状態アイコン定数が正しいファイル名であること。"""
+        assert VoiceCodeApp.ICON_IDLE == "icon_idle.png"
+        assert VoiceCodeApp.ICON_RECORDING == "icon_recording.png"
+        assert VoiceCodeApp.ICON_PROCESSING == "icon_processing.png"
 
     def test_sound_constants(self):
         """効果音定数が正しいパスであること。"""
@@ -183,6 +183,28 @@ class TestVoiceCodeAppConstants:
         assert VoiceCodeApp.SOUND_STOP == "/System/Library/Sounds/Pop.aiff"
         assert VoiceCodeApp.SOUND_SUCCESS == "/System/Library/Sounds/Glass.aiff"
         assert VoiceCodeApp.SOUND_ERROR == "/System/Library/Sounds/Basso.aiff"
+
+
+class TestVoiceCodeAppGetIconPath:
+    """VoiceCodeAppの_get_icon_pathメソッドのテスト。"""
+
+    def test_get_icon_path_returns_assets_path(self):
+        """_get_icon_pathがassets/ディレクトリ内のパスを返すこと。"""
+        path = VoiceCodeApp._get_icon_path("icon_idle.png")
+        assert "assets" in path
+        assert path.endswith("icon_idle.png")
+
+    def test_get_icon_path_all_icons(self):
+        """全アイコンファイルのパスが正しく生成されること。"""
+        icons = [
+            VoiceCodeApp.ICON_IDLE,
+            VoiceCodeApp.ICON_RECORDING,
+            VoiceCodeApp.ICON_PROCESSING,
+        ]
+        for icon_name in icons:
+            path = VoiceCodeApp._get_icon_path(icon_name)
+            assert path.endswith(icon_name)
+            assert "assets" in path
 
 
 class TestVoiceCodeAppPlaySound:
@@ -253,7 +275,7 @@ class TestVoiceCodeAppInitialization:
     @patch("main.AudioRecorder")
     @patch("main.load_dotenv")
     @patch.dict("os.environ", {"HOTKEY": "f15"})
-    def test_init_sets_idle_title(
+    def test_init_sets_idle_icon(
         self,
         mock_load_dotenv,
         mock_recorder,
@@ -263,9 +285,13 @@ class TestVoiceCodeAppInitialization:
         mock_timer,
         mock_popen,
     ):
-        """初期化時にIDLEアイコンがタイトルに設定されること。"""
+        """初期化時にIDLEアイコンが設定されること。"""
         app = VoiceCodeApp()
-        assert app.title == VoiceCodeApp.ICON_IDLE
+        # titleは空文字列（アイコンのみ表示）
+        assert app.title == ""
+        # iconにはパスが設定される
+        assert app.icon is not None
+        assert VoiceCodeApp.ICON_IDLE in app.icon
 
     @patch("main.subprocess.Popen")
     @patch("main.rumps.Timer")

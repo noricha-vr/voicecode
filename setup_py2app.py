@@ -21,7 +21,13 @@ with open(pyproject_path, "rb") as f:
 version = pyproject["project"]["version"]
 
 APP = ['main.py']
-DATA_FILES = []
+DATA_FILES = [
+    ('assets', [
+        'assets/icon_idle.png',
+        'assets/icon_recording.png',
+        'assets/icon_processing.png',
+    ]),
+]
 OPTIONS = {
     'argv_emulation': False,  # rumps では False が推奨
     'plist': {

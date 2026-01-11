@@ -46,6 +46,7 @@ SYSTEM_PROMPT = """<instructions>
 
 <rule priority="4" name="出力形式">
 修正後のテキストのみを返す。説明や補足は不要。
+絶対にXMLタグ（<output>、<text>など）で囲まない。プレーンテキストのみ出力。
 </rule>
 </rules>
 
@@ -180,6 +181,11 @@ SYSTEM_PROMPT = """<instructions>
 <input>演武ファイルの使い方について説明してください</input>
 <output>.envファイルの使い方について説明してください。</output>
 <explanation>プログラミング文脈で「ファイル」と組み合わせなら環境変数ファイル「.env」が正しい</explanation>
+</example>
+<example name="同音異義語修正（化して/貸して）">
+<input>ドキュメント貸してください</input>
+<output>ドキュメント化してください</output>
+<explanation>「ドキュメント」と組み合わせる場合、「化して」（ドキュメント化する）が正しい</explanation>
 </example>
 </examples>
 
@@ -351,9 +357,8 @@ class PostProcessor:
 
         result = response.choices[0].message.content.strip()
 
-        # LLMが出力に付けるXMLタグを除去
-        result = re.sub(r'^<output>\s*', '', result)
-        result = re.sub(r'\s*</output>$', '', result)
+        # LLMが出力に付けるXMLタグを除去（<output>タグおよび予期しないタグ）
+        result = re.sub(r'<[^>]+>', '', result)
 
         logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
         return result, elapsed

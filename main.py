@@ -203,10 +203,10 @@ def _format_hotkey(keys: set[keyboard.Key | keyboard.KeyCode]) -> str:
 class VoiceCodeApp(rumps.App):
     """音声入力ツールのメインクラス（メニューバーアプリ）。"""
 
-    # 状態アイコン定数
-    ICON_IDLE = "■"
-    ICON_RECORDING = "●"
-    ICON_PROCESSING = "↻"
+    # 状態アイコン定数（PNG画像を使用）
+    ICON_IDLE = "icon_idle.png"
+    ICON_RECORDING = "icon_recording.png"
+    ICON_PROCESSING = "icon_processing.png"
 
     # 効果音定数
     SOUND_START = "/System/Library/Sounds/Tink.aiff"
@@ -216,7 +216,7 @@ class VoiceCodeApp(rumps.App):
 
     def __init__(self):
         """VoiceCodeAppを初期化する。"""
-        super().__init__("VoiceCode", icon=None, title=self.ICON_IDLE)
+        super().__init__("VoiceCode", icon=self._get_icon_path(self.ICON_IDLE), title="")
         config_dir = Path.home() / ".voicecode"
         config_dir.mkdir(parents=True, exist_ok=True)
         env_path = config_dir / ".env"
@@ -249,6 +249,29 @@ class VoiceCodeApp(rumps.App):
 
         # キーボードリスナーを別スレッドで起動
         self._start_keyboard_listener()
+
+    @staticmethod
+    def _get_icon_path(filename: str) -> str:
+        """アイコンファイルのパスを取得する。
+
+        スクリプト実行時とpy2appビルド時の両方に対応。
+
+        Args:
+            filename: アイコンファイル名（例: "icon_idle.png"）
+
+        Returns:
+            アイコンファイルの絶対パス
+        """
+        # py2appでビルドした場合: アプリバンドル内のResourcesディレクトリ
+        if getattr(sys, "frozen", False):
+            # frozen = True は py2app でビルドされたことを示す
+            bundle_dir = Path(sys.executable).parent.parent / "Resources" / "assets"
+        else:
+            # スクリプト実行時: main.py と同じディレクトリの assets/
+            bundle_dir = Path(__file__).parent / "assets"
+
+        icon_path = bundle_dir / filename
+        return str(icon_path)
 
     def _play_sound(self, sound_path: str) -> None:
         """効果音を非同期再生する。
@@ -407,7 +430,7 @@ class VoiceCodeApp(rumps.App):
         """録音を開始する。"""
         try:
             self._recorder.start()
-            self.title = self.ICON_RECORDING
+            self.icon = self._get_icon_path(self.ICON_RECORDING)
             self._overlay.show()
             self._play_sound(self.SOUND_START)
             hotkey_display = self._format_hotkey_display()
@@ -416,13 +439,13 @@ class VoiceCodeApp(rumps.App):
             print("=" * 50)
         except Exception as e:
             print(f"[Error] Failed to start recording: {e}")
-            self.title = self.ICON_IDLE
+            self.icon = self._get_icon_path(self.ICON_IDLE)
             self._play_sound(self.SOUND_ERROR)
 
     def _stop_and_process(self) -> None:
         """録音を停止し、処理を実行する。"""
         self._processing = True
-        self.title = self.ICON_PROCESSING
+        self.icon = self._get_icon_path(self.ICON_PROCESSING)
         self._overlay.hide()
         self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
@@ -443,7 +466,7 @@ class VoiceCodeApp(rumps.App):
 
             if not transcribed_text.strip():
                 print("[Warning] No speech detected")
-                self.title = self.ICON_IDLE
+                self.icon = self._get_icon_path(self.ICON_IDLE)
                 self._play_sound(self.SOUND_ERROR)
                 return
 
@@ -480,7 +503,7 @@ class VoiceCodeApp(rumps.App):
                     processed_text=processed_text,
                 )
 
-            self.title = self.ICON_IDLE
+            self.icon = self._get_icon_path(self.ICON_IDLE)
             self._play_sound(self.SOUND_SUCCESS)
 
             hotkey_display = self._format_hotkey_display()
@@ -490,7 +513,7 @@ class VoiceCodeApp(rumps.App):
 
         except Exception as e:
             print(f"[Error] Processing failed: {e}")
-            self.title = self.ICON_IDLE
+            self.icon = self._get_icon_path(self.ICON_IDLE)
             self._play_sound(self.SOUND_ERROR)
 
         finally:

@@ -29,3 +29,6 @@ Thumbs.db
 
 # py2app build artifacts
 *.dmg
+
+# Private docs
+docs/distribution-strategy.md

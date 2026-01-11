@@ -113,6 +113,22 @@ class TestPostProcessor:
         assert isinstance(elapsed, float)
 
     @patch("postprocessor.OpenAI")
+    def test_process_removes_unexpected_xml_tags(self, mock_openai_class):
+        """出力から予期しないXMLタグが除去されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="<bos>work tree</>テスト"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        assert result == "work treeテスト"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
     def test_process_without_xml_tags(self, mock_openai_class):
         """XMLタグがない場合はそのまま返されること。"""
         mock_client = MagicMock()
