@@ -9,7 +9,7 @@ import re
 import time
 from pathlib import Path
 
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -302,6 +302,8 @@ class PostProcessor:
     """
 
     MODEL = "google/gemini-2.5-flash-lite"
+    TIMEOUT = 5.0
+    MAX_RETRIES = 1
 
     def __init__(self, api_key: str | None = None):
         """PostProcessorを初期化する。
@@ -319,6 +321,8 @@ class PostProcessor:
         self._client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=self._api_key,
+            timeout=self.TIMEOUT,
+            max_retries=self.MAX_RETRIES,
         )
 
         # ユーザー辞書を読み込んでシステムプロンプトに追加
@@ -339,19 +343,25 @@ class PostProcessor:
 
         Returns:
             修正後のテキストと処理時間（秒）のタプル。
+            タイムアウトの場合は元のテキストをそのまま返す（フォールバック）。
         """
         if not text.strip():
             return "", 0.0
 
         start_time = time.time()
 
-        response = self._client.chat.completions.create(
-            model=self.MODEL,
-            messages=[
-                {"role": "system", "content": self._system_prompt},
-                {"role": "user", "content": text},
-            ],
-        )
+        try:
+            response = self._client.chat.completions.create(
+                model=self.MODEL,
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": text},
+                ],
+            )
+        except APITimeoutError:
+            elapsed = time.time() - start_time
+            logger.error(f"[Gemini] APIタイムアウト: リトライ後も失敗しました ({elapsed:.2f}s)")
+            return text, elapsed
 
         elapsed = time.time() - start_time
 

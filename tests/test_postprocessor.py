@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from openai import APITimeoutError
 
 from postprocessor import PostProcessor, SYSTEM_PROMPT, _load_user_dictionary
 
@@ -25,6 +26,8 @@ class TestPostProcessor:
         mock_openai_class.assert_called_once_with(
             base_url="https://openrouter.ai/api/v1",
             api_key="test_key",
+            timeout=PostProcessor.TIMEOUT,
+            max_retries=PostProcessor.MAX_RETRIES,
         )
 
     @patch("postprocessor.OpenAI")
@@ -35,6 +38,8 @@ class TestPostProcessor:
             mock_openai_class.assert_called_once_with(
                 base_url="https://openrouter.ai/api/v1",
                 api_key="env_key",
+                timeout=PostProcessor.TIMEOUT,
+                max_retries=PostProcessor.MAX_RETRIES,
             )
 
     @patch("postprocessor.OpenAI")
@@ -147,6 +152,30 @@ class TestPostProcessor:
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
         assert PostProcessor.MODEL == "google/gemini-2.5-flash-lite"
+
+    def test_timeout_and_max_retries_constants(self):
+        """タイムアウトとリトライ定数が正しいこと。"""
+        assert PostProcessor.TIMEOUT == 5.0
+        assert PostProcessor.MAX_RETRIES == 1
+
+    @patch("postprocessor.OpenAI")
+    def test_process_timeout_returns_original_text(self, mock_openai_class, caplog):
+        """タイムアウト時に元のテキストを返すこと（フォールバック）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        mock_client.chat.completions.create.side_effect = APITimeoutError(request=MagicMock())
+
+        processor = PostProcessor(api_key="test_key")
+
+        with caplog.at_level(logging.ERROR, logger="postprocessor"):
+            result, elapsed = processor.process("リアクト")
+
+        # 元のテキストがそのまま返されること
+        assert result == "リアクト"
+        assert isinstance(elapsed, float)
+        assert elapsed >= 0
+        # エラーログが出力されていることを確認
+        assert any("APIタイムアウト" in record.message for record in caplog.records)
 
     def test_system_prompt_contains_conversion_examples(self):
         """システムプロンプトに変換例が含まれていること。"""
