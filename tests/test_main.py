@@ -632,6 +632,213 @@ class TestVoiceCodeAppStopAndProcess:
         mock_copy.assert_called()
         mock_controller_instance.tap.assert_called_once_with('v')
 
+class TestVoiceCodeAppKeyRepeatPrevention:
+    """VoiceCodeAppのキーリピート防止テスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_key_repeat_ignored(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """キーリピート時に_toggle_recordingが1回だけ呼ばれること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = False
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        # ホットキーをF15に設定
+        app._hotkey = {keyboard.Key.f15}
+        app._toggle_recording = MagicMock()
+
+        # F15キーを正規化した形でシミュレート
+        f15_key = keyboard.Key.f15
+
+        # Act - 同じキーを3回押す（キーリピートをシミュレート）
+        app._on_press(f15_key)
+        app._on_press(f15_key)
+        app._on_press(f15_key)
+
+        # Assert - _toggle_recordingは1回だけ呼ばれる
+        app._toggle_recording.assert_called_once()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_key_release_allows_new_press(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """キーを離してから再度押すと_toggle_recordingが再度呼ばれること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = False
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        # ホットキーをF15に設定
+        app._hotkey = {keyboard.Key.f15}
+        app._toggle_recording = MagicMock()
+
+        f15_key = keyboard.Key.f15
+
+        # Act - 押す→離す→押す
+        app._on_press(f15_key)
+        app._on_release(f15_key)
+        app._on_press(f15_key)
+
+        # Assert - _toggle_recordingは2回呼ばれる
+        assert app._toggle_recording.call_count == 2
+
+
+class TestVoiceCodeAppPushToTalk:
+    """VoiceCodeAppのPush-to-Talkモードテスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_push_to_talk_stops_on_release(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """Push-to-Talkモードで、キーを離すと録音が停止すること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        # ホットキーをF15に設定
+        app._hotkey = {keyboard.Key.f15}
+        app._settings._push_to_talk = True
+        app._stop_and_process = MagicMock()
+
+        # F15キーが押されている状態をシミュレート
+        f15_key = keyboard.Key.f15
+        app._current_keys.add(f15_key)
+
+        # Act - キーを離す
+        app._on_release(f15_key)
+
+        # Assert - 録音停止が呼ばれる
+        app._stop_and_process.assert_called_once()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_toggle_mode_continues_on_release(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """トグルモード（デフォルト）で、キーを離しても録音が継続すること。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = True
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        # ホットキーをF15に設定
+        app._hotkey = {keyboard.Key.f15}
+        app._settings._push_to_talk = False  # デフォルト
+        app._stop_and_process = MagicMock()
+
+        # F15キーが押されている状態をシミュレート
+        f15_key = keyboard.Key.f15
+        app._current_keys.add(f15_key)
+
+        # Act - キーを離す
+        app._on_release(f15_key)
+
+        # Assert - 録音停止は呼ばれない
+        app._stop_and_process.assert_not_called()
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_push_to_talk_no_stop_when_not_recording(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """Push-to-Talkモードでも、録音中でなければ停止処理は呼ばれないこと。"""
+        # Arrange
+        mock_recorder_instance = MagicMock()
+        mock_recorder_instance.is_recording = False
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+        # ホットキーをF15に設定
+        app._hotkey = {keyboard.Key.f15}
+        app._settings._push_to_talk = True
+        app._stop_and_process = MagicMock()
+
+        # F15キーが押されている状態をシミュレート
+        f15_key = keyboard.Key.f15
+        app._current_keys.add(f15_key)
+
+        # Act - キーを離す
+        app._on_release(f15_key)
+
+        # Assert - 録音停止は呼ばれない
+        app._stop_and_process.assert_not_called()
+
+
 class TestVoiceCodeAppLogSettings:
     """VoiceCodeAppの_log_settingsメソッドのテスト。"""
 
@@ -668,6 +875,7 @@ class TestVoiceCodeAppLogSettings:
         assert "[Settings] Hotkey: F15" in caplog.text
         assert "[Settings] Max Recording: 120s" in caplog.text
         assert "[Settings] Restore Clipboard: True" in caplog.text
+        assert "[Settings] Push-to-Talk: False" in caplog.text
 
     @patch("main.subprocess.Popen")
     @patch("main.rumps.Timer")
@@ -725,6 +933,34 @@ class TestVoiceCodeAppLogSettings:
             app._log_settings()
 
         assert "[Settings] Restore Clipboard: False" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", {"HOTKEY": "f15"})
+    def test_log_settings_push_to_talk_true(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """_log_settingsがpush_to_talk=Trueを正しく出力すること。"""
+        with caplog.at_level(logging.INFO):
+            app = VoiceCodeApp()
+            app._settings._push_to_talk = True
+            caplog.clear()
+            app._log_settings()
+
+        assert "[Settings] Push-to-Talk: True" in caplog.text
 
 
 class TestVoiceCodeAppCheckTimeout:

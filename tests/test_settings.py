@@ -22,6 +22,7 @@ class TestSettings:
             assert settings.hotkey == "f15"
             assert settings.restore_clipboard is True
             assert settings.max_recording_duration == 120
+            assert settings.push_to_talk is False
 
     def test_load_from_file(self):
         """ファイルから設定を読み込めること。"""
@@ -35,7 +36,8 @@ class TestSettings:
                 json.dumps({
                     "hotkey": "f12",
                     "restore_clipboard": False,
-                    "max_recording_duration": 180
+                    "max_recording_duration": 180,
+                    "push_to_talk": True
                 }),
                 encoding="utf-8",
             )
@@ -45,6 +47,7 @@ class TestSettings:
             assert settings.hotkey == "f12"
             assert settings.restore_clipboard is False
             assert settings.max_recording_duration == 180
+            assert settings.push_to_talk is True
 
     def test_save_creates_directory(self):
         """save() がディレクトリを自動作成すること。"""
@@ -67,6 +70,7 @@ class TestSettings:
             settings1.hotkey = "ctrl+shift+r"
             settings1.restore_clipboard = False
             settings1.max_recording_duration = 200
+            settings1.push_to_talk = True
             settings1.save()
 
             # 新しいインスタンスで読み込み
@@ -75,6 +79,7 @@ class TestSettings:
             assert settings2.hotkey == "ctrl+shift+r"
             assert settings2.restore_clipboard is False
             assert settings2.max_recording_duration == 200
+            assert settings2.push_to_talk is True
 
     def test_hotkey_setter_normalizes_case(self):
         """hotkey setter が小文字に正規化すること。"""
@@ -119,6 +124,18 @@ class TestSettings:
 
             settings.max_recording_duration = 240
             assert settings.max_recording_duration == 240
+
+    def test_push_to_talk_setter(self):
+        """push_to_talk setter が動作すること。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir) / ".voicecode"
+            settings = Settings(config_dir=config_dir)
+
+            settings.push_to_talk = True
+            assert settings.push_to_talk is True
+
+            settings.push_to_talk = False
+            assert settings.push_to_talk is False
 
     def test_max_recording_duration_min_boundary(self):
         """max_recording_duration が最小値（10秒）に制限されること。"""
@@ -178,6 +195,7 @@ class TestSettings:
             assert settings.hotkey == "f15"
             assert settings.restore_clipboard is True
             assert settings.max_recording_duration == 120
+            assert settings.push_to_talk is False
 
     def test_load_handles_invalid_json(self):
         """不正なJSONファイルの場合にデフォルト値を使用すること。"""
@@ -192,6 +210,7 @@ class TestSettings:
             assert settings.hotkey == "f15"
             assert settings.restore_clipboard is True
             assert settings.max_recording_duration == 120
+            assert settings.push_to_talk is False
 
     def test_load_handles_partial_config(self):
         """一部の設定のみ含むファイルを読み込めること。"""
@@ -211,6 +230,7 @@ class TestSettings:
             assert settings.hotkey == "f12"
             assert settings.restore_clipboard is True  # デフォルト値
             assert settings.max_recording_duration == 120  # デフォルト値
+            assert settings.push_to_talk is False  # デフォルト値
 
     def test_load_ignores_invalid_types(self):
         """不正な型の値を無視すること。"""
@@ -224,7 +244,8 @@ class TestSettings:
                 json.dumps({
                     "hotkey": 123,
                     "restore_clipboard": "yes",
-                    "max_recording_duration": "60"
+                    "max_recording_duration": "60",
+                    "push_to_talk": "true"
                 }),
                 encoding="utf-8",
             )
@@ -234,6 +255,7 @@ class TestSettings:
             assert settings.hotkey == "f15"  # デフォルト値
             assert settings.restore_clipboard is True  # デフォルト値
             assert settings.max_recording_duration == 120  # デフォルト値
+            assert settings.push_to_talk is False  # デフォルト値
 
     def test_to_dict(self):
         """to_dict() が正しい辞書を返すこと。"""
@@ -243,6 +265,7 @@ class TestSettings:
             settings.hotkey = "f12"
             settings.restore_clipboard = False
             settings.max_recording_duration = 180
+            settings.push_to_talk = True
 
             result = settings.to_dict()
 
@@ -250,6 +273,7 @@ class TestSettings:
                 "hotkey": "f12",
                 "restore_clipboard": False,
                 "max_recording_duration": 180,
+                "push_to_talk": True,
             }
 
     def test_default_constants(self):
@@ -257,6 +281,7 @@ class TestSettings:
         assert Settings.DEFAULT_HOTKEY == "f15"
         assert Settings.DEFAULT_RESTORE_CLIPBOARD is True
         assert Settings.DEFAULT_MAX_RECORDING_DURATION == 120
+        assert Settings.DEFAULT_PUSH_TO_TALK is False
         assert Settings.MIN_RECORDING_DURATION == 10
         assert Settings.MAX_RECORDING_DURATION == 300
 
@@ -288,6 +313,7 @@ class TestSettingsIntegration:
             settings.hotkey = "ctrl+r"
             settings.restore_clipboard = True
             settings.max_recording_duration = 180
+            settings.push_to_talk = True
             settings.save()
 
             config_file = config_dir / "settings.json"
@@ -298,6 +324,7 @@ class TestSettingsIntegration:
                 "hotkey": "ctrl+r",
                 "restore_clipboard": True,
                 "max_recording_duration": 180,
+                "push_to_talk": True,
             }
 
     def test_config_dir_path(self):

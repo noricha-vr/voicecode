@@ -18,6 +18,7 @@ class Settings:
     DEFAULT_HOTKEY = "f15"
     DEFAULT_RESTORE_CLIPBOARD = True
     DEFAULT_MAX_RECORDING_DURATION = 120
+    DEFAULT_PUSH_TO_TALK = False
 
     # 最大録音時間の範囲制限
     MIN_RECORDING_DURATION = 10
@@ -38,6 +39,7 @@ class Settings:
         self._hotkey: str = self.DEFAULT_HOTKEY
         self._restore_clipboard: bool = self.DEFAULT_RESTORE_CLIPBOARD
         self._max_recording_duration: int = self.DEFAULT_MAX_RECORDING_DURATION
+        self._push_to_talk: bool = self.DEFAULT_PUSH_TO_TALK
 
         self.load()
 
@@ -77,6 +79,16 @@ class Settings:
             min(value, self.MAX_RECORDING_DURATION)
         )
 
+    @property
+    def push_to_talk(self) -> bool:
+        """Push-to-Talk モード設定を取得する。"""
+        return self._push_to_talk
+
+    @push_to_talk.setter
+    def push_to_talk(self, value: bool) -> None:
+        """Push-to-Talk モード設定を更新する。"""
+        self._push_to_talk = value
+
     def load(self) -> None:
         """設定ファイルから設定を読み込む。
 
@@ -98,6 +110,9 @@ class Settings:
             if "max_recording_duration" in data and isinstance(data["max_recording_duration"], int):
                 self.max_recording_duration = data["max_recording_duration"]
 
+            if "push_to_talk" in data and isinstance(data["push_to_talk"], bool):
+                self._push_to_talk = data["push_to_talk"]
+
         except (json.JSONDecodeError, OSError) as e:
             print(f"[Warning] Failed to load settings: {e}")
 
@@ -113,6 +128,7 @@ class Settings:
             "hotkey": self._hotkey,
             "restore_clipboard": self._restore_clipboard,
             "max_recording_duration": self._max_recording_duration,
+            "push_to_talk": self._push_to_talk,
         }
 
         try:
@@ -127,4 +143,5 @@ class Settings:
             "hotkey": self._hotkey,
             "restore_clipboard": self._restore_clipboard,
             "max_recording_duration": self._max_recording_duration,
+            "push_to_talk": self._push_to_talk,
         }

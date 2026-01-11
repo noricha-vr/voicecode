@@ -280,6 +280,7 @@ class VoiceCodeApp(rumps.App):
         logger.info(f"[Settings] Hotkey: {self._settings.hotkey.upper()}")
         logger.info(f"[Settings] Max Recording: {self._settings.max_recording_duration}s")
         logger.info(f"[Settings] Restore Clipboard: {self._settings.restore_clipboard}")
+        logger.info(f"[Settings] Push-to-Talk: {self._settings.push_to_talk}")
 
     def _init_menu(self) -> None:
         """メニュー項目を初期化する。"""
@@ -355,6 +356,11 @@ class VoiceCodeApp(rumps.App):
         """キー押下時のコールバック。"""
         logger.debug(f"Key pressed: {key}")
         normalized_key = self._normalize_key(key)
+
+        # キーリピート検出: 既に押されているキーは無視
+        if normalized_key in self._current_keys:
+            return
+
         self._current_keys.add(normalized_key)
 
         if self._check_hotkey():
@@ -365,6 +371,11 @@ class VoiceCodeApp(rumps.App):
         logger.debug(f"Key released: {key}")
         normalized_key = self._normalize_key(key)
         self._current_keys.discard(normalized_key)
+
+        # Push-to-Talk モード: キーを離したら録音停止
+        if self._settings.push_to_talk and self._recorder.is_recording:
+            if not self._check_hotkey():  # ホットキーが離れた
+                self._stop_and_process()
 
     def _normalize_key(self, key: keyboard.Key | keyboard.KeyCode) -> keyboard.Key | keyboard.KeyCode:
         """キーを正規化する。"""
