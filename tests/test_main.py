@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pynput import keyboard
 
-from main import VoiceCodeApp, _format_hotkey, _parse_hotkey
+from main import (
+    VoiceCodeApp,
+    _format_hotkey,
+    _parse_hotkey,
+    check_accessibility_permission,
+    check_input_monitoring_permission,
+)
 
 
 # VoiceCodeApp のテストで常に必要なモック
@@ -21,12 +27,14 @@ VOICECODE_APP_PATCHES = {
 
 
 @pytest.fixture(autouse=True)
-def mock_check_microphone_permission():
-    """check_microphone_permission をモックするフィクスチャ。
+def mock_all_permission_checks():
+    """全ての権限チェック関数をモックするフィクスチャ。
 
     autouse=True により、このモジュール内の全テストで自動的に適用される。
     """
-    with patch("main.check_microphone_permission", return_value=True):
+    with patch("main.check_microphone_permission", return_value=True), \
+         patch("main.check_input_monitoring_permission", return_value=True), \
+         patch("main.check_accessibility_permission", return_value=True):
         yield
 
 
@@ -1163,3 +1171,247 @@ class TestVoiceCodeAppCheckTimeout:
 
         # Assert
         app._stop_and_process.assert_not_called()
+
+
+class TestCheckInputMonitoringPermission:
+    """check_input_monitoring_permission関数のテスト。
+
+    Note: これらのテストは autouse フィクスチャの影響を受けないよう、
+    実際の関数ロジックを直接テストするのではなく、
+    VoiceCodeApp._check_permissions 経由でテストする。
+    """
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=True)
+    @patch("main.check_microphone_permission", return_value=True)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_input_monitoring_permission_check_is_called(
+        self,
+        mock_mic_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """入力監視権限チェックが呼び出されること。"""
+        with patch("main.check_input_monitoring_permission", return_value=True) as mock_input_perm:
+            app = VoiceCodeApp()
+            # 初期化時に呼び出されていることを確認
+            mock_input_perm.assert_called()
+
+
+class TestCheckAccessibilityPermission:
+    """check_accessibility_permission関数のテスト。
+
+    Note: これらのテストは autouse フィクスチャの影響を受けないよう、
+    VoiceCodeApp._check_permissions 経由でテストする。
+    """
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_input_monitoring_permission", return_value=True)
+    @patch("main.check_microphone_permission", return_value=True)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_accessibility_permission_check_is_called(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """アクセシビリティ権限チェックが呼び出されること。"""
+        with patch("main.check_accessibility_permission", return_value=True) as mock_access_perm:
+            app = VoiceCodeApp()
+            # 初期化時に呼び出されていることを確認
+            mock_access_perm.assert_called()
+
+
+class TestVoiceCodeAppCheckPermissions:
+    """VoiceCodeAppの_check_permissionsメソッドのテスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=True)
+    @patch("main.check_input_monitoring_permission", return_value=True)
+    @patch("main.check_microphone_permission", return_value=True)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_check_permissions_no_warning_when_all_granted(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """全権限が許可されている場合、警告が出力されないこと。"""
+        with caplog.at_level(logging.WARNING):
+            app = VoiceCodeApp()
+            caplog.clear()
+            app._check_permissions()
+
+        assert "[Warning]" not in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=True)
+    @patch("main.check_input_monitoring_permission", return_value=True)
+    @patch("main.check_microphone_permission", return_value=False)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_check_permissions_warns_microphone(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """マイク権限がない場合、警告が出力されること。"""
+        with caplog.at_level(logging.WARNING):
+            app = VoiceCodeApp()
+            caplog.clear()
+            app._check_permissions()
+
+        assert "Microphone permission not granted" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=True)
+    @patch("main.check_input_monitoring_permission", return_value=False)
+    @patch("main.check_microphone_permission", return_value=True)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_check_permissions_warns_input_monitoring(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """入力監視権限がない場合、警告が出力されること。"""
+        with caplog.at_level(logging.WARNING):
+            app = VoiceCodeApp()
+            caplog.clear()
+            app._check_permissions()
+
+        assert "Input monitoring permission not granted" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=False)
+    @patch("main.check_input_monitoring_permission", return_value=True)
+    @patch("main.check_microphone_permission", return_value=True)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_check_permissions_warns_accessibility(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """アクセシビリティ権限がない場合、警告が出力されること。"""
+        with caplog.at_level(logging.WARNING):
+            app = VoiceCodeApp()
+            caplog.clear()
+            app._check_permissions()
+
+        assert "Accessibility permission not granted" in caplog.text
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch("main.check_accessibility_permission", return_value=False)
+    @patch("main.check_input_monitoring_permission", return_value=False)
+    @patch("main.check_microphone_permission", return_value=False)
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_check_permissions_warns_all_missing(
+        self,
+        mock_mic_perm,
+        mock_input_perm,
+        mock_access_perm,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+        caplog,
+    ):
+        """全権限がない場合、全ての警告が出力されること。"""
+        with caplog.at_level(logging.WARNING):
+            app = VoiceCodeApp()
+            caplog.clear()
+            app._check_permissions()
+
+        assert "Microphone permission not granted" in caplog.text
+        assert "Input monitoring permission not granted" in caplog.text
+        assert "Accessibility permission not granted" in caplog.text

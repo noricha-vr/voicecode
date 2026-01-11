@@ -30,6 +30,42 @@ from recorder import AudioRecorder, MicrophonePermissionError, RecordingConfig, 
 from settings import Settings
 from transcriber import Transcriber
 
+# 権限チェック関数
+
+
+def check_input_monitoring_permission() -> bool:
+    """入力監視権限をチェックする。
+
+    pynput.keyboard.Listener を作成できるかどうかで権限を判定する。
+    権限がない場合、Listener の start() で例外が発生する。
+
+    Returns:
+        権限がある場合は True、ない場合は False
+    """
+    try:
+        listener = keyboard.Listener(on_press=lambda k: False)
+        listener.start()
+        listener.stop()
+        return True
+    except Exception:
+        return False
+
+
+def check_accessibility_permission() -> bool:
+    """アクセシビリティ権限をチェックする。
+
+    macOS の ApplicationServices フレームワークの AXIsProcessTrusted() を使用。
+
+    Returns:
+        権限がある場合は True、ない場合は False
+    """
+    try:
+        from ApplicationServices import AXIsProcessTrusted
+        return AXIsProcessTrusted()
+    except ImportError:
+        # ApplicationServices が使えない場合は True を返す（非 macOS 環境など）
+        return True
+
 # ログ設定
 logger = logging.getLogger(__name__)
 
@@ -231,8 +267,8 @@ class VoiceCodeApp(rumps.App):
         # 起動時に設定内容をログ出力
         self._log_settings()
 
-        # マイク権限をチェック
-        self._check_microphone_permission()
+        # 権限をチェック（マイク、入力監視、アクセシビリティ）
+        self._check_permissions()
 
         self._hotkey = _parse_hotkey(self._settings.hotkey)
         recording_config = RecordingConfig(
@@ -308,18 +344,52 @@ class VoiceCodeApp(rumps.App):
         logger.info(f"[Settings] Restore Clipboard: {self._settings.restore_clipboard}")
         logger.info(f"[Settings] Push-to-Talk: {self._settings.push_to_talk}")
 
-    def _check_microphone_permission(self) -> None:
-        """起動時にマイク権限をチェックする。
+    def _check_permissions(self) -> None:
+        """起動時に必要な権限をまとめてチェックする。
 
-        権限がない場合は警告メッセージを表示するが、アプリは起動を続ける。
+        以下の権限をチェックし、不足している場合は警告メッセージを表示する:
+        - マイク権限: 音声録音に必要
+        - 入力監視権限: ホットキー検出に必要
+        - アクセシビリティ権限: キー入力シミュレーションに必要
+
+        権限がなくてもアプリは起動を続ける。
         """
+        warnings: list[str] = []
+
+        # マイク権限チェック
         if not check_microphone_permission():
             logger.warning("[Warning] Microphone permission not granted")
+            warnings.append(
+                "[Warning] マイク権限が許可されていません\n"
+                "システム設定 > プライバシーとセキュリティ > マイク で\n"
+                "ターミナル（または VoiceCode.app）を許可してください。"
+            )
+
+        # 入力監視権限チェック
+        if not check_input_monitoring_permission():
+            logger.warning("[Warning] Input monitoring permission not granted")
+            warnings.append(
+                "[Warning] 入力監視権限が許可されていません\n"
+                "システム設定 > プライバシーとセキュリティ > 入力監視 で\n"
+                "ターミナル（または VoiceCode.app）を許可してください。"
+            )
+
+        # アクセシビリティ権限チェック
+        if not check_accessibility_permission():
+            logger.warning("[Warning] Accessibility permission not granted")
+            warnings.append(
+                "[Warning] アクセシビリティ権限が許可されていません\n"
+                "システム設定 > プライバシーとセキュリティ > アクセシビリティ で\n"
+                "ターミナル（または VoiceCode.app）を許可してください。"
+            )
+
+        # 警告があれば一括表示
+        if warnings:
             print("\n" + "=" * 60)
-            print("[Warning] マイク権限が許可されていません")
-            print("-" * 60)
-            print("システム設定 > プライバシーとセキュリティ > マイク で")
-            print("ターミナル（または VoiceCode.app）を許可してください。")
+            for i, warning in enumerate(warnings):
+                if i > 0:
+                    print("-" * 60)
+                print(warning)
             print("=" * 60 + "\n")
 
     def _init_menu(self) -> None:
