@@ -47,6 +47,7 @@ SYSTEM_PROMPT = """<instructions>
 <rule priority="4" name="出力形式">
 修正後のテキストのみを返す。説明や補足は不要。
 絶対にXMLタグ（<output>、<text>など）で囲まない。プレーンテキストのみ出力。
+一文ごとに改行し、意味のまとまりで空行を入れる。
 </rule>
 </rules>
 
@@ -186,6 +187,12 @@ SYSTEM_PROMPT = """<instructions>
 <input>ドキュメント貸してください</input>
 <output>ドキュメント化してください</output>
 <explanation>「ドキュメント」と組み合わせる場合、「化して」（ドキュメント化する）が正しい</explanation>
+</example>
+
+<example name="同音異義語修正（Revision/Rebase）">
+<input>Revisionは最新版を使用しています。</input>
+<output>Revisionは最新版を使用しています。</output>
+<explanation>「Revision」（リビジョン、バージョン番号）を「Rebase」（Gitのリベース操作）に変換しない。文脈から「バージョン」の意味で使われている。</explanation>
 </example>
 </examples>
 

@@ -252,7 +252,7 @@ class VoiceCodeApp(rumps.App):
 
     def __init__(self):
         """VoiceCodeAppを初期化する。"""
-        super().__init__("VoiceCode", icon=self._get_icon_path(self.ICON_IDLE), title="")
+        super().__init__("VoiceCode", icon=self._get_icon_path(self.ICON_IDLE), title="", quit_button="終了")
         config_dir = Path.home() / ".voicecode"
         config_dir.mkdir(parents=True, exist_ok=True)
         env_path = config_dir / ".env"
@@ -457,11 +457,6 @@ class VoiceCodeApp(rumps.App):
             print("\n[Timeout] Max recording duration reached")
             self._stop_and_process()
 
-    @rumps.clicked("終了")
-    def quit_app(self, _):
-        """アプリを終了する。"""
-        rumps.quit_application()
-
     def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         """キー押下時のコールバック。"""
         logger.debug(f"Key pressed: {key}")
@@ -591,6 +586,9 @@ class VoiceCodeApp(rumps.App):
             # 合計時間を表示
             total_time = transcription_time + postprocess_time
             print(f"[Total] {total_time:.2f}s")
+
+            # 修正コマンドを表示
+            print('[Fix] cd /Users/ms25/project/voicecode && claude "/fix-voice  "')
 
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():
