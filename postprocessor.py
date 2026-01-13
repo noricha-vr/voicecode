@@ -194,6 +194,12 @@ SYSTEM_PROMPT = """<instructions>
 <output>Revisionは最新版を使用しています。</output>
 <explanation>「Revision」（リビジョン、バージョン番号）を「Rebase」（Gitのリベース操作）に変換しない。文脈から「バージョン」の意味で使われている。</explanation>
 </example>
+
+<example name="同音異義語修正（Issue/実習）">
+<input>実習が立っているか確認してください</input>
+<output>Issueが立っているか確認してください</output>
+<explanation>プログラミング文脈で「立っている」と組み合わせる場合、GitHubの「Issue」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
