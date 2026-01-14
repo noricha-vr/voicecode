@@ -206,6 +206,18 @@ SYSTEM_PROMPT = """<instructions>
 <output>改行された文章を貼り付けると圧縮されてしまう</output>
 <explanation>プログラミング文脈で「文章」「貼り付け」と組み合わせる場合、「改行」が正しい</explanation>
 </example>
+
+<example name="同音異義語修正（レビュアー/リビジョン）">
+<input>変更が終わったらリビジョンエージェントで確認してください</input>
+<output>変更が終わったらレビュアーエージェントで確認してください</output>
+<explanation>「確認してください」と組み合わせる場合、コードレビューを行う「レビュアー」が正しい。「リビジョン」はバージョン番号の意味。</explanation>
+</example>
+
+<example name="同音異義語修正（Slug/Slack）">
+<input>Slackが登録されたテストが登録されていなければ、新たにテストを作成してください</input>
+<output>Slugが登録されたテストが登録されていなければ、新たにテストを作成してください</output>
+<explanation>「テスト」「登録」と組み合わせる場合、URLスラッグの「Slug」が正しい。「Slack」はチャットツール。</explanation>
+</example>
 </examples>
 
 <terminology>
