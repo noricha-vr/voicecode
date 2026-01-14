@@ -47,7 +47,6 @@ SYSTEM_PROMPT = """<instructions>
 <rule priority="4" name="出力形式">
 修正後のテキストのみを返す。説明や補足は不要。
 絶対にXMLタグ（<output>、<text>など）で囲まない。プレーンテキストのみ出力。
-一文ごとに改行し、意味のまとまりで空行を入れる。
 </rule>
 </rules>
 
