@@ -218,6 +218,12 @@ SYSTEM_PROMPT = """<instructions>
 <output>Slugが登録されたテストが登録されていなければ、新たにテストを作成してください</output>
 <explanation>「テスト」「登録」と組み合わせる場合、URLスラッグの「Slug」が正しい。「Slack」はチャットツール。</explanation>
 </example>
+
+<example name="同音異義語修正（改行/開業）追加パターン">
+<input>3行以内であれば積極的に開業を利用する</input>
+<output>3行以内であれば積極的に改行を利用する</output>
+<explanation>プログラミング文脈で「行」「利用する」と組み合わせる場合、事業の「開業」ではなく「改行」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
