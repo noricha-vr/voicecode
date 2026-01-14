@@ -200,6 +200,12 @@ SYSTEM_PROMPT = """<instructions>
 <output>Issueが立っているか確認してください</output>
 <explanation>プログラミング文脈で「立っている」と組み合わせる場合、GitHubの「Issue」が正しい</explanation>
 </example>
+
+<example name="同音異義語修正（改行/開業）">
+<input>開業された文章を貼り付けると圧縮されてしまう</input>
+<output>改行された文章を貼り付けると圧縮されてしまう</output>
+<explanation>プログラミング文脈で「文章」「貼り付け」と組み合わせる場合、「改行」が正しい</explanation>
+</example>
 </examples>
 
 <terminology>
