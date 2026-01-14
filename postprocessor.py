@@ -383,11 +383,11 @@ class PostProcessor:
         # LLMが出力に付けるXMLタグを除去（<output>タグおよび予期しないタグ）
         result = re.sub(r'<[^>]+>', '', result)
 
-        # 4行以上の出力をフォールバック：改行を削除して1行にまとめる
+        # 4行以上の出力をフォールバック：最初の3行のみを残す
         lines = result.split('\n')
         if len(lines) > 3:
-            logger.warning(f"[Gemini] 出力が{len(lines)}行のため1行に結合します")
-            result = ''.join(line.strip() for line in lines if line.strip())
+            logger.warning(f"[Gemini] 出力が{len(lines)}行のため3行に結合します")
+            result = '\n'.join(line for line in lines[:3])
 
         logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
         return result, elapsed
