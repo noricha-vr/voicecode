@@ -47,6 +47,7 @@ SYSTEM_PROMPT = """<instructions>
 <rule priority="4" name="出力形式">
 修正後のテキストのみを返す。説明や補足は不要。
 絶対にXMLタグ（<output>、<text>など）で囲まない。プレーンテキストのみ出力。
+出力は最大3行以内に収める。長い文章でも改行は最大2つまで。
 </rule>
 </rules>
 
@@ -381,6 +382,12 @@ class PostProcessor:
 
         # LLMが出力に付けるXMLタグを除去（<output>タグおよび予期しないタグ）
         result = re.sub(r'<[^>]+>', '', result)
+
+        # 4行以上の出力をフォールバック：改行を削除して1行にまとめる
+        lines = result.split('\n')
+        if len(lines) > 3:
+            logger.warning(f"[Gemini] 出力が{len(lines)}行のため1行に結合します")
+            result = ''.join(line.strip() for line in lines if line.strip())
 
         logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
         return result, elapsed
