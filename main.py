@@ -18,9 +18,11 @@ import subprocess
 import time
 from pathlib import Path
 
+import objc
 import pyperclip
 import rumps
 from dotenv import load_dotenv
+from Foundation import NSObject
 from pynput import keyboard
 
 from history import HistoryManager
@@ -236,6 +238,44 @@ def _format_hotkey(keys: set[keyboard.Key | keyboard.KeyCode]) -> str:
     return "+".join(key_names)
 
 
+class _StatusItemHelper(NSObject):
+    """メインスレッドでアイコン更新を実行するヘルパークラス。
+
+    pynputリスナーはバックグラウンドスレッドで動作するため、
+    NSStatusItemの更新はメインスレッドで行う必要がある。
+    """
+
+    def initWithApp_(self, app):
+        """ヘルパーを初期化する。
+
+        Args:
+            app: VoiceCodeAppインスタンス
+        """
+        self = objc.super(_StatusItemHelper, self).init()
+        if self is None:
+            return None
+        self._app = app
+        self._pending_icon_path = None
+        return self
+
+    @objc.python_method
+    def set_icon(self, icon_path: str):
+        """アイコンを設定する（メインスレッドで実行）。
+
+        Args:
+            icon_path: アイコンファイルのパス
+        """
+        self._pending_icon_path = icon_path
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            "doSetIcon", None, False
+        )
+
+    def doSetIcon(self):
+        """実際のアイコン設定処理（メインスレッドで実行）。"""
+        if self._pending_icon_path and self._app:
+            self._app.icon = self._pending_icon_path
+
+
 class VoiceCodeApp(rumps.App):
     """音声入力ツールのメインクラス（メニューバーアプリ）。"""
 
@@ -282,6 +322,9 @@ class VoiceCodeApp(rumps.App):
         self._current_keys: set = set()
         self._processing = False
         self._overlay = RecordingOverlay()
+
+        # アイコン更新用ヘルパー（バックグラウンドスレッドからのUI更新に必要）
+        self._status_helper = _StatusItemHelper.alloc().initWithApp_(self)
 
         # メニュー項目を初期化
         self._init_menu()
@@ -512,7 +555,7 @@ class VoiceCodeApp(rumps.App):
         """録音を開始する。"""
         try:
             self._recorder.start()
-            self.icon = self._get_icon_path(self.ICON_RECORDING)
+            self._status_helper.set_icon(self._get_icon_path(self.ICON_RECORDING))
             self._overlay.show()
             self._play_sound(self.SOUND_START)
             hotkey_display = self._format_hotkey_display()
@@ -527,17 +570,17 @@ class VoiceCodeApp(rumps.App):
             print("システム設定 > プライバシーとセキュリティ > マイク で")
             print("ターミナル（または VoiceCode.app）を許可してください。")
             print("=" * 60 + "\n")
-            self.icon = self._get_icon_path(self.ICON_IDLE)
+            self._status_helper.set_icon(self._get_icon_path(self.ICON_IDLE))
             self._play_sound(self.SOUND_ERROR)
         except Exception as e:
             print(f"[Error] Failed to start recording: {e}")
-            self.icon = self._get_icon_path(self.ICON_IDLE)
+            self._status_helper.set_icon(self._get_icon_path(self.ICON_IDLE))
             self._play_sound(self.SOUND_ERROR)
 
     def _stop_and_process(self) -> None:
         """録音を停止し、処理を実行する。"""
         self._processing = True
-        self.icon = self._get_icon_path(self.ICON_PROCESSING)
+        self._status_helper.set_icon(self._get_icon_path(self.ICON_PROCESSING))
         self._overlay.hide()
         self._play_sound(self.SOUND_STOP)
         audio_path: Path | None = None
@@ -558,7 +601,7 @@ class VoiceCodeApp(rumps.App):
 
             if not transcribed_text.strip():
                 print("[Warning] No speech detected")
-                self.icon = self._get_icon_path(self.ICON_IDLE)
+                self._status_helper.set_icon(self._get_icon_path(self.ICON_IDLE))
                 self._play_sound(self.SOUND_ERROR)
                 return
 
@@ -598,7 +641,7 @@ class VoiceCodeApp(rumps.App):
                     processed_text=processed_text,
                 )
 
-            self.icon = self._get_icon_path(self.ICON_IDLE)
+            self._status_helper.set_icon(self._get_icon_path(self.ICON_IDLE))
             self._play_sound(self.SOUND_SUCCESS)
 
             hotkey_display = self._format_hotkey_display()
@@ -608,7 +651,7 @@ class VoiceCodeApp(rumps.App):
 
         except Exception as e:
             print(f"[Error] Processing failed: {e}")
-            self.icon = self._get_icon_path(self.ICON_IDLE)
+            self._status_helper.set_icon(self._get_icon_path(self.ICON_IDLE))
             self._play_sound(self.SOUND_ERROR)
 
         finally:

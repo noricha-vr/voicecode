@@ -10,6 +10,7 @@ from pynput import keyboard
 
 from main import (
     VoiceCodeApp,
+    _StatusItemHelper,
     _format_hotkey,
     _parse_hotkey,
     check_accessibility_permission,
@@ -1415,3 +1416,130 @@ class TestVoiceCodeAppCheckPermissions:
         assert "Microphone permission not granted" in caplog.text
         assert "Input monitoring permission not granted" in caplog.text
         assert "Accessibility permission not granted" in caplog.text
+
+
+class TestStatusItemHelper:
+    """_StatusItemHelperクラスのテスト。
+
+    バックグラウンドスレッドからメインスレッドへのUI更新委譲をテストする。
+    """
+
+    def test_init_with_app(self):
+        """initWithApp_がアプリを正しく保持すること。"""
+        mock_app = MagicMock()
+        helper = _StatusItemHelper.alloc().initWithApp_(mock_app)
+
+        assert helper is not None
+        assert helper._app is mock_app
+        assert helper._pending_icon_path is None
+
+    def test_set_icon_stores_path(self):
+        """set_iconがアイコンパスを保持すること。"""
+        mock_app = MagicMock()
+        helper = _StatusItemHelper.alloc().initWithApp_(mock_app)
+
+        # performSelectorOnMainThread_ をモック
+        with patch.object(helper, "performSelectorOnMainThread_withObject_waitUntilDone_"):
+            helper.set_icon("/path/to/icon.png")
+
+        assert helper._pending_icon_path == "/path/to/icon.png"
+
+    def test_set_icon_dispatches_to_main_thread(self):
+        """set_iconがメインスレッドへのディスパッチを呼び出すこと。"""
+        mock_app = MagicMock()
+        helper = _StatusItemHelper.alloc().initWithApp_(mock_app)
+
+        with patch.object(helper, "performSelectorOnMainThread_withObject_waitUntilDone_") as mock_dispatch:
+            helper.set_icon("/path/to/icon.png")
+
+        mock_dispatch.assert_called_once_with("doSetIcon", None, False)
+
+    def test_doSetIcon_updates_app_icon(self):
+        """doSetIconがアプリのアイコンを更新すること。"""
+        mock_app = MagicMock()
+        helper = _StatusItemHelper.alloc().initWithApp_(mock_app)
+        helper._pending_icon_path = "/path/to/icon.png"
+
+        helper.doSetIcon()
+
+        assert mock_app.icon == "/path/to/icon.png"
+
+    def test_doSetIcon_with_none_path_does_nothing(self):
+        """doSetIconがNoneパスの場合は何もしないこと。"""
+        mock_app = MagicMock()
+        helper = _StatusItemHelper.alloc().initWithApp_(mock_app)
+        helper._pending_icon_path = None
+
+        helper.doSetIcon()
+
+        # アイコンは設定されない
+        assert not hasattr(mock_app, "icon") or mock_app.icon != "/path/to/icon.png"
+
+    def test_doSetIcon_with_none_app_does_not_crash(self):
+        """doSetIconがNoneアプリの場合でもクラッシュしないこと。"""
+        helper = _StatusItemHelper.alloc().initWithApp_(None)
+        helper._pending_icon_path = "/path/to/icon.png"
+
+        # クラッシュしないこと
+        helper.doSetIcon()
+
+
+class TestStatusItemHelperIntegration:
+    """_StatusItemHelperとVoiceCodeAppの統合テスト。"""
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_app_initializes_status_helper(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """VoiceCodeAppが_status_helperを初期化すること。"""
+        app = VoiceCodeApp()
+
+        assert hasattr(app, "_status_helper")
+        assert app._status_helper is not None
+        assert isinstance(app._status_helper, _StatusItemHelper)
+
+    @patch("main.subprocess.Popen")
+    @patch("main.rumps.Timer")
+    @patch("main.keyboard.Listener")
+    @patch("main.Transcriber")
+    @patch("main.PostProcessor")
+    @patch("main.AudioRecorder")
+    @patch("main.load_dotenv")
+    @patch.dict("os.environ", VOICECODE_APP_PATCHES)
+    def test_start_recording_uses_status_helper(
+        self,
+        mock_load_dotenv,
+        mock_recorder,
+        mock_postprocessor,
+        mock_transcriber,
+        mock_listener,
+        mock_timer,
+        mock_popen,
+    ):
+        """_start_recordingがstatus_helperを使用すること。"""
+        mock_recorder_instance = MagicMock()
+        mock_recorder.return_value = mock_recorder_instance
+
+        app = VoiceCodeApp()
+
+        with patch.object(app._status_helper, "set_icon") as mock_set_icon:
+            app._start_recording()
+
+        mock_set_icon.assert_called_once()
+        # 呼び出された引数がRECORDINGアイコンであること
+        call_args = mock_set_icon.call_args[0][0]
+        assert "icon_recording.png" in call_args
