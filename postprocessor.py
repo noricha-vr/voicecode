@@ -407,11 +407,22 @@ class PostProcessor:
         # LLMが出力に付けるXMLタグを除去（<output>タグおよび予期しないタグ）
         result = re.sub(r'<[^>]+>', '', result)
 
-        # 4行以上の出力をフォールバック：最初の3行のみを残す
+        # 4行以上の出力をフォールバック：3行に均等配分（余りは1行目から）
         lines = result.split('\n')
         if len(lines) > 3:
             logger.warning(f"[Gemini] 出力が{len(lines)}行のため3行に結合します")
-            result = '\n'.join(line for line in lines[:3])
+            # 行数を3で割って均等に配分
+            # 例: 4行→2,1,1行、5行→2,2,1行、7行→3,2,2行
+            base = len(lines) // 3
+            remainder = len(lines) % 3
+            # 余りは1行目から順に追加
+            sizes = [base + (1 if i < remainder else 0) for i in range(3)]
+            idx = 0
+            merged = []
+            for size in sizes:
+                merged.append(''.join(lines[idx:idx+size]))
+                idx += size
+            result = '\n'.join(merged)
 
         logger.info(f"[Gemini] {result} ({elapsed:.2f}s)")
         return result, elapsed

@@ -267,6 +267,132 @@ class TestPostProcessor:
         assert any("[Gemini]" in record.message for record in caplog.records)
         assert any("React" in record.message for record in caplog.records)
 
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_lines_over_three(self, mock_openai_class):
+        """4行以上の出力が3行に均等配分されること（余りは1行目から）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 5行の出力をシミュレート: 5÷3=1余り2 → 2行,2行,1行
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n4行目\n5行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 均等配分: 1行目2行目 / 3行目4行目 / 5行目
+        assert result == "1行目2行目\n3行目4行目\n5行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_lines_with_empty_lines(self, mock_openai_class):
+        """空行を含む4行以上の出力が正しく均等配分されること（余りは1行目から）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 空行を含む5行の出力をシミュレート: 5÷3=1余り2 → 2行,2行,1行
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n\n5行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 均等配分: 1行目2行目 / 3行目（空行） / 5行目
+        assert result == "1行目2行目\n3行目\n5行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_six_lines_evenly(self, mock_openai_class):
+        """6行の出力が均等に2行ずつ配分されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 6行の出力をシミュレート: 6÷3=2余り0 → 2行,2行,2行
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n4行目\n5行目\n6行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 均等配分: 1行目2行目 / 3行目4行目 / 5行目6行目
+        assert result == "1行目2行目\n3行目4行目\n5行目6行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_seven_lines_with_remainder(self, mock_openai_class):
+        """7行の出力が3,2,2行に配分されること（余りは1行目から）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 7行の出力をシミュレート: 7÷3=2余り1 → 3行,2行,2行
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n4行目\n5行目\n6行目\n7行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 均等配分: 1行目2行目3行目 / 4行目5行目 / 6行目7行目
+        assert result == "1行目2行目3行目\n4行目5行目\n6行目7行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_keeps_three_lines_unchanged(self, mock_openai_class):
+        """3行以下の出力はそのまま返されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 3行の出力をシミュレート
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 3行以下はそのまま
+        assert result == "1行目\n2行目\n3行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_four_lines_with_remainder(self, mock_openai_class):
+        """4行の出力が2,1,1行に配分されること（余りは1行目から）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        # 4行の出力をシミュレート: 4÷3=1余り1 → 2行,1行,1行
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n4行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        result, elapsed = processor.process("テスト")
+
+        # 均等配分: 1行目2行目 / 3行目 / 4行目
+        assert result == "1行目2行目\n3行目\n4行目"
+        assert isinstance(elapsed, float)
+
+    @patch("postprocessor.OpenAI")
+    def test_process_merges_lines_logs_warning(self, mock_openai_class, caplog):
+        """4行以上の出力で警告ログが出力されること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="1行目\n2行目\n3行目\n4行目"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+
+        with caplog.at_level(logging.WARNING, logger="postprocessor"):
+            result, elapsed = processor.process("テスト")
+
+        # 警告ログが出力されること
+        assert any("4行のため3行に結合" in record.message for record in caplog.records)
+
 
 class TestLoadUserDictionary:
     """_load_user_dictionary関数のテスト。"""
