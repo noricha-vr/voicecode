@@ -81,8 +81,8 @@ class TestPostProcessor:
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "google/gemini-2.5-flash-lite"
         assert call_kwargs["messages"] == [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "リアクト"},
+            {"role": "system", "content": SYSTEM_PROMPT},
         ]
 
     @patch("postprocessor.OpenAI")
@@ -184,11 +184,13 @@ class TestPostProcessor:
         assert 'japanese="タイプスクリプト" english="TypeScript"' in SYSTEM_PROMPT
         assert 'japanese="ユースステート" english="useState"' in SYSTEM_PROMPT
 
-    def test_system_prompt_prevents_translation(self):
-        """システムプロンプトに日本語維持ルールが含まれていること。"""
-        # 日本語維持ルールが含まれていること
-        assert "日本語維持" in SYSTEM_PROMPT
-        assert "英語に翻訳しない" in SYSTEM_PROMPT
+    def test_system_prompt_defines_role_as_transcriber(self):
+        """システムプロンプトに中継役としての役割が定義されていること。"""
+        # ペアプログラマーの耳としての役割が含まれていること
+        assert "ペアプログラマーの耳" in SYSTEM_PROMPT
+        assert "中継役" in SYSTEM_PROMPT
+        # 指示に応答しないことが明記されていること
+        assert "応答する立場ではありません" in SYSTEM_PROMPT
 
     def test_system_prompt_contains_examples(self):
         """システムプロンプトに入力例と出力例が含まれていること。"""
@@ -245,7 +247,8 @@ class TestPostProcessor:
         processor.process("テスト")
 
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-        assert "ユーザー辞書" in call_kwargs["messages"][0]["content"]
+        # メッセージ順序: user → system
+        assert "ユーザー辞書" in call_kwargs["messages"][1]["content"]
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary", return_value="")
