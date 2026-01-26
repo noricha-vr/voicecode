@@ -6,6 +6,7 @@
 メニューバーアプリとして動作し、状態をアイコンで表示する。
 """
 
+import argparse
 import sys
 
 if sys.platform != "darwin":
@@ -675,8 +676,102 @@ class VoiceCodeApp(rumps.App):
             self._processing = False
 
 
+def _daemonize() -> None:
+    """プロセスをデーモン化する。
+
+    os.fork() を使用して親プロセスを終了し、子プロセスで継続する。
+    標準入出力をログファイルにリダイレクトする。
+    """
+    # 最初の fork
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # 親プロセスは終了（fork後はos._exit()を使用）
+            os._exit(0)
+    except OSError as e:
+        print(f"[Error] fork #1 failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 新しいセッションを作成
+    os.setsid()
+
+    # ファイル作成時のパーミッションマスク（所有者のみ読み書き可能）
+    os.umask(0o077)
+
+    # 2回目の fork（セッションリーダーから離れる）
+    try:
+        pid = os.fork()
+        if pid > 0:
+            # 親プロセスは終了（fork後はos._exit()を使用）
+            os._exit(0)
+    except OSError as e:
+        print(f"[Error] fork #2 failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 標準入出力をリダイレクト
+    daemon_log_dir = Path.home() / ".voicecode"
+    daemon_log_dir.mkdir(parents=True, exist_ok=True)
+    daemon_log_file = daemon_log_dir / "voicecode.log"
+
+    # 標準入力を /dev/null にリダイレクト（OSレベル + Pythonオブジェクト）
+    devnull_fd = os.open("/dev/null", os.O_RDWR)
+    os.dup2(devnull_fd, 0)  # stdin
+    sys.stdin = os.fdopen(0, "r")
+
+    # 標準出力と標準エラーをログファイルにリダイレクト（OSレベル + Pythonオブジェクト）
+    log_fd = os.open(str(daemon_log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    os.dup2(log_fd, 1)  # stdout
+    os.dup2(log_fd, 2)  # stderr
+    sys.stdout = os.fdopen(1, "w", buffering=1)
+    sys.stderr = os.fdopen(2, "w", buffering=1)
+
+    # 元のファイルディスクリプタを閉じる（dup2でコピー済み）
+    os.close(devnull_fd)
+    os.close(log_fd)
+
+    # コンソールハンドラを削除（閉じたstderrへの書き込みを防ぐ）
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and hasattr(handler.stream, 'name') and handler.stream.name == '<stderr>':
+            root_logger.removeHandler(handler)
+
+
+def _parse_args() -> argparse.Namespace:
+    """コマンドライン引数をパースする。
+
+    macOS Finderからの起動時に渡される -psn_0_... 引数を無視するため、
+    parse_known_args() を使用する。
+
+    Returns:
+        パースされた引数
+    """
+    parser = argparse.ArgumentParser(
+        description="VoiceCode - 音声入力ツール",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+例:
+  uv run python main.py        # フォアグラウンドで実行
+  uv run python main.py -d     # バックグラウンド（デーモン）で実行
+""",
+    )
+    parser.add_argument(
+        "-d", "--daemon",
+        action="store_true",
+        help="バックグラウンドで実行（注意: PyObjCのfork安全性の問題があるため、"
+             "launchctl経由での起動を推奨）",
+    )
+    # parse_known_args() を使用して未知の引数（-psn_0_... 等）を無視
+    args, _ = parser.parse_known_args()
+    return args
+
+
 def main() -> None:
     """エントリポイント。"""
+    args = _parse_args()
+
+    if args.daemon:
+        _daemonize()
+
     app = VoiceCodeApp()
     app.run()
 

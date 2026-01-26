@@ -11,7 +11,9 @@ from pynput import keyboard
 from main import (
     VoiceCodeApp,
     _StatusItemHelper,
+    _daemonize,
     _format_hotkey,
+    _parse_args,
     _parse_hotkey,
     check_accessibility_permission,
     check_input_monitoring_permission,
@@ -1543,3 +1545,281 @@ class TestStatusItemHelperIntegration:
         # 呼び出された引数がRECORDINGアイコンであること
         call_args = mock_set_icon.call_args[0][0]
         assert "icon_recording.png" in call_args
+
+
+class TestParseArgs:
+    """_parse_args関数のテスト。"""
+
+    def test_no_arguments(self):
+        """引数なしの場合、daemon=Falseであること。"""
+        with patch("sys.argv", ["main.py"]):
+            args = _parse_args()
+        assert args.daemon is False
+
+    def test_daemon_short_flag(self):
+        """短いフラグ -d でdaemon=Trueになること。"""
+        with patch("sys.argv", ["main.py", "-d"]):
+            args = _parse_args()
+        assert args.daemon is True
+
+    def test_daemon_long_flag(self):
+        """長いフラグ --daemon でdaemon=Trueになること。"""
+        with patch("sys.argv", ["main.py", "--daemon"]):
+            args = _parse_args()
+        assert args.daemon is True
+
+    def test_help_flag_exits(self):
+        """-h フラグでSystemExitが発生すること。"""
+        with patch("sys.argv", ["main.py", "-h"]):
+            with pytest.raises(SystemExit) as exc_info:
+                _parse_args()
+            # argparseは正常終了で0を返す
+            assert exc_info.value.code == 0
+
+    def test_unknown_argument_ignored(self):
+        """不明な引数は無視されること（parse_known_argsを使用）。"""
+        with patch("sys.argv", ["main.py", "--unknown"]):
+            # parse_known_args() を使用しているため、エラーにならない
+            args = _parse_args()
+            assert args.daemon is False
+
+    def test_psn_argument_ignored(self):
+        """macOS Finderからの -psn 引数が無視されること。"""
+        # Finderからの起動時に付与される引数をシミュレート
+        with patch("sys.argv", ["VoiceCode", "-psn_0_12345678"]):
+            args = _parse_args()
+            assert args.daemon is False
+
+    def test_psn_with_daemon_flag(self):
+        """-psn 引数と -d フラグが混在しても正しく処理されること。"""
+        with patch("sys.argv", ["VoiceCode", "-psn_0_12345678", "-d"]):
+            args = _parse_args()
+            assert args.daemon is True
+
+    def test_daemon_help_mentions_launchctl(self, capsys):
+        """daemonオプションのヘルプにlaunchctl推奨の警告が含まれること。"""
+        import io
+        import sys as real_sys
+
+        with patch("sys.argv", ["main.py", "-h"]):
+            with pytest.raises(SystemExit):
+                _parse_args()
+
+        captured = capsys.readouterr()
+        assert "launchctl" in captured.out
+
+
+class TestDaemonize:
+    """_daemonize関数のテスト。
+
+    注意: _daemonize()は実際にsys.stdin/stdout/stderrを閉じるため、
+    すべてのテストでこれらを適切にモックする必要がある。
+    os._exit()をモックしないと実際にプロセスが終了してしまうため、
+    親プロセスとして終了するケースでは必ずモックする。
+    """
+
+    @patch("main.logging.getLogger")
+    @patch("builtins.open")
+    @patch("os.umask")
+    @patch("os._exit")
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_first_fork_parent_exits(self, mock_setsid, mock_fork, mock_exit, mock_umask, mock_open, mock_get_logger):
+        """最初のforkで親プロセスがos._exit(0)で終了すること。"""
+        # 最初のforkで親（pid > 0）
+        mock_fork.return_value = 100
+
+        # os._exit()をモック（呼ばれたら例外で停止）
+        mock_exit.side_effect = SystemExit(0)
+
+        with pytest.raises(SystemExit):
+            _daemonize()
+
+        mock_exit.assert_called_once_with(0)
+        mock_fork.assert_called_once()
+        mock_setsid.assert_not_called()
+
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_first_fork_error(self, mock_setsid, mock_fork):
+        """最初のforkが失敗した場合、sys.exit(1)でエラー終了すること。"""
+        mock_fork.side_effect = OSError("fork failed")
+
+        with pytest.raises(SystemExit) as exc_info:
+            _daemonize()
+
+        assert exc_info.value.code == 1
+        mock_setsid.assert_not_called()
+
+    @patch("main.logging.getLogger")
+    @patch("builtins.open")
+    @patch("os._exit")
+    @patch("os.umask")
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_second_fork_parent_exits(self, mock_setsid, mock_fork, mock_umask, mock_exit, mock_open, mock_get_logger):
+        """2回目のforkで親プロセスがos._exit(0)で終了すること。"""
+        # 最初のfork: 子（pid == 0）、2回目のfork: 親（pid > 0）
+        mock_fork.side_effect = [0, 100]
+
+        # os._exit()をモック（呼ばれたら例外で停止）
+        mock_exit.side_effect = SystemExit(0)
+
+        with pytest.raises(SystemExit):
+            _daemonize()
+
+        mock_exit.assert_called_once_with(0)
+        assert mock_fork.call_count == 2
+        mock_setsid.assert_called_once()
+        mock_umask.assert_called_once_with(0o077)  # 所有者のみ読み書き可能
+
+    @patch("main.logging.getLogger")
+    @patch("builtins.open")
+    @patch("os.umask")
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_second_fork_error(self, mock_setsid, mock_fork, mock_umask, mock_open, mock_get_logger):
+        """2回目のforkが失敗した場合、sys.exit(1)でエラー終了すること。"""
+        mock_fork.side_effect = [0, OSError("fork failed")]
+
+        with pytest.raises(SystemExit) as exc_info:
+            _daemonize()
+
+        assert exc_info.value.code == 1
+        mock_setsid.assert_called_once()
+
+    @patch("main.logging.getLogger")
+    @patch("os.close")
+    @patch("os.fdopen")
+    @patch("os.dup2")
+    @patch("os.open")
+    @patch("os.umask")
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_successful_daemonization(
+        self, mock_setsid, mock_fork, mock_umask, mock_os_open, mock_dup2, mock_fdopen, mock_close, mock_get_logger
+    ):
+        """デーモン化が成功した場合、標準入出力がリダイレクトされること。"""
+        # 両方のforkで子プロセス（pid == 0）
+        mock_fork.side_effect = [0, 0]
+        # os.open() は devnull_fd=3, log_fd=4 を返す
+        mock_os_open.side_effect = [3, 4]
+        mock_file = MagicMock()
+        mock_file.name = "<stderr>"
+        mock_fdopen.return_value = mock_file
+
+        # ロガーのモック
+        mock_logger = MagicMock()
+        mock_handler = MagicMock(spec=logging.StreamHandler)
+        mock_handler.stream = MagicMock()
+        mock_handler.stream.name = "<stderr>"
+        mock_logger.handlers = [mock_handler]
+        mock_get_logger.return_value = mock_logger
+
+        _daemonize()
+
+        # forkが2回呼ばれること
+        assert mock_fork.call_count == 2
+        # setsidが呼ばれること
+        mock_setsid.assert_called_once()
+        # umaskが呼ばれること（所有者のみ読み書き可能）
+        mock_umask.assert_called_once_with(0o077)
+        # os.open() が2回呼ばれること（/dev/null と ログファイル）
+        assert mock_os_open.call_count == 2
+        # os.dup2() が3回呼ばれること（stdin, stdout, stderr）
+        assert mock_dup2.call_count == 3
+        mock_dup2.assert_any_call(3, 0)  # devnull -> stdin
+        mock_dup2.assert_any_call(4, 1)  # log -> stdout
+        mock_dup2.assert_any_call(4, 2)  # log -> stderr
+        # os.fdopen() が3回呼ばれること（stdin, stdout, stderr）
+        assert mock_fdopen.call_count == 3
+        # os.close() が2回呼ばれること（元のdevnull_fd, log_fd）
+        assert mock_close.call_count == 2
+        mock_close.assert_any_call(3)  # devnull_fd
+        mock_close.assert_any_call(4)  # log_fd
+        # コンソールハンドラが削除されること
+        mock_logger.removeHandler.assert_called()
+
+    @patch("main.logging.getLogger")
+    @patch("os.close")
+    @patch("os.fdopen")
+    @patch("os.dup2")
+    @patch("os.open")
+    @patch("os.umask")
+    @patch("os.fork")
+    @patch("os.setsid")
+    def test_daemonization_removes_console_handler(
+        self, mock_setsid, mock_fork, mock_umask, mock_os_open, mock_dup2, mock_fdopen, mock_close, mock_get_logger
+    ):
+        """デーモン化時にstderrに接続されたコンソールハンドラが削除されること。"""
+        mock_fork.side_effect = [0, 0]
+        # os.open() は devnull_fd=3, log_fd=4 を返す
+        mock_os_open.side_effect = [3, 4]
+        mock_file = MagicMock()
+        mock_fdopen.return_value = mock_file
+
+        # stderrに接続されたStreamHandlerをモック
+        mock_logger = MagicMock()
+        mock_stream_handler = MagicMock(spec=logging.StreamHandler)
+        mock_stream_handler.stream = MagicMock()
+        mock_stream_handler.stream.name = "<stderr>"
+        # FileHandlerはStreamHandlerではないので、isinstance()チェックで弾かれる
+        # specを使わずMagicMockを作成し、StreamHandlerの型チェックに失敗させる
+        mock_file_handler = MagicMock()
+        mock_logger.handlers = [mock_stream_handler, mock_file_handler]
+        mock_get_logger.return_value = mock_logger
+
+        _daemonize()
+
+        # stderrハンドラのみが削除されること
+        mock_logger.removeHandler.assert_called_once_with(mock_stream_handler)
+
+
+class TestMainFunction:
+    """main関数のテスト。"""
+
+    @patch("main.VoiceCodeApp")
+    @patch("main._daemonize")
+    @patch("main._parse_args")
+    def test_main_without_daemon(self, mock_parse_args, mock_daemonize, mock_app_class):
+        """daemon=Falseの場合、_daemonizeが呼ばれないこと。"""
+        from main import main
+
+        mock_args = MagicMock()
+        mock_args.daemon = False
+        mock_parse_args.return_value = mock_args
+
+        mock_app = MagicMock()
+        mock_app_class.return_value = mock_app
+
+        with patch("main.check_microphone_permission", return_value=True), \
+             patch("main.check_input_monitoring_permission", return_value=True), \
+             patch("main.check_accessibility_permission", return_value=True):
+            main()
+
+        mock_daemonize.assert_not_called()
+        mock_app_class.assert_called_once()
+        mock_app.run.assert_called_once()
+
+    @patch("main.VoiceCodeApp")
+    @patch("main._daemonize")
+    @patch("main._parse_args")
+    def test_main_with_daemon(self, mock_parse_args, mock_daemonize, mock_app_class):
+        """daemon=Trueの場合、_daemonizeが呼ばれること。"""
+        from main import main
+
+        mock_args = MagicMock()
+        mock_args.daemon = True
+        mock_parse_args.return_value = mock_args
+
+        mock_app = MagicMock()
+        mock_app_class.return_value = mock_app
+
+        with patch("main.check_microphone_permission", return_value=True), \
+             patch("main.check_input_monitoring_permission", return_value=True), \
+             patch("main.check_accessibility_permission", return_value=True):
+            main()
+
+        mock_daemonize.assert_called_once()
+        mock_app_class.assert_called_once()
+        mock_app.run.assert_called_once()
