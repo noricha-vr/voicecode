@@ -4,21 +4,60 @@
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 
-macOS用の音声入力ツール。ホットキー1回で音声入力から文字起こし、LLM後処理、貼り付けまでを自動化する。
+**エンジニアのための音声入力ツール**
+
+Claude Code や Cursor で AI コーディングしているとき、音声で指示を出したくなりませんか？
+でも一般的な音声認識はプログラミング用語を正しく認識してくれません。VoiceCode が解決します。
+
+## なぜ VoiceCode？
+
+一般的な音声認識はプログラミング用語をカタカナのまま出力します。AI への指示としてそのまま使うと意図が伝わりにくい。
+
+```
+音声認識の出力: 「ユーズステートで状態管理して」
+               「ドットエンブローカルを作成して」
+               「プリズマでデータベース接続して」
+```
+
+VoiceCode は Whisper で文字起こし後、LLM がプログラミング用語を正しい表記に補正します。
+
+```
+VoiceCode:     「useState で状態管理して」
+               「.env.local を作成して」
+               「Prisma でデータベース接続して」
+```
+
+## 変換例
+
+| 話した内容 | 音声認識の出力 | VoiceCode |
+|-----------|---------------|-----------|
+| ゲットサーバーサイドプロップス | ゲットサーバー、サイドプロップス | getServerSideProps |
+| ドットエンブローカル | .円舞.ローカル | .env.local |
+| ドットギットイグノア | ..イグノア | .gitignore |
+| ティーエスコンフィグ | DSコンフィグ | tsconfig.json |
+| エヌピーエム | ピーピーエム | npm |
+| クーベシーティーエル | 久米シティL | kubectl |
+| ケーエイツエス | ケツ | k8s |
+| スベルトキット | 滑るトキット | SvelteKit |
+| ネクストジェイエス | Next Chess | Next.js |
 
 ## 特徴
 
+- **無料で使える**: Groq / OpenRouter の無料枠で十分（課金不要）
 - **ワンキー操作**: F15（カスタマイズ可能）で録音開始/停止をトグル
 - **高速文字起こし**: Groq Whisper (whisper-large-v3-turbo) による高精度な音声認識
-- **プログラミング用語の自動補正**: Gemini 2.5 Flash Lite (OpenRouter) でカタカナを英語表記に変換
+- **プログラミング用語の自動補正**: Gemini (OpenRouter) でカタカナを英語表記に変換
 - **シームレスな入力**: 自動でクリップボードにコピー&貼り付け
 - **メニューバー常駐**: 状態アイコン（■/●/↻）で録音状態を確認
 - **効果音フィードバック**: 録音開始・停止・完了時に効果音でお知らせ
-- **録音時間制限**: 最大120秒で自動停止（設定で変更可能）
 
 ## クイックスタート
 
 ```bash
+# リポジトリをクローン
+git clone https://github.com/noricha-vr/voicecode.git
+cd voicecode
+
 # 依存関係をインストール
 uv sync
 
@@ -79,6 +118,7 @@ EOF
 API キーの取得先:
 - Groq: https://console.groq.com/keys
 - OpenRouter: https://openrouter.ai/keys
+- 詳細な取得手順: [docs/api-setup.md](docs/api-setup.md)
 
 ホットキーはメニューバーの「ホットキー設定...」から変更できます。設定は `~/.voicecode/settings.json` に保存されます。
 
@@ -165,18 +205,6 @@ launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
 ```bash
 tail -f /tmp/voicecode.log
 ```
-
-## 変換例
-
-| 音声認識結果 | 変換後 |
-|-------------|--------|
-| リアクト | React |
-| タイプスクリプト | TypeScript |
-| ネクストJS | Next.js |
-| ユースステート | useState |
-| クロード | Claude |
-| パイソン | Python |
-| ジャバスクリプト | JavaScript |
 
 ## アーキテクチャ
 
