@@ -349,3 +349,49 @@ class TestLoadUserDictionary:
             assert 'japanese="クロードコード" english="Claude Code"' in result
             assert "不正な行" not in result
             assert "タブなし行" not in result
+
+
+class TestSystemPromptHallucinationRemoval:
+    """SYSTEM_PROMPTのハルシネーション除去機能のテスト。"""
+
+    def test_system_prompt_contains_hallucination_removal_section(self):
+        """システムプロンプトにハルシネーション除去セクションが含まれていること。"""
+        assert "<hallucination_removal>" in SYSTEM_PROMPT
+        assert "</hallucination_removal>" in SYSTEM_PROMPT
+
+    def test_system_prompt_lists_hallucination_patterns(self):
+        """システムプロンプトにハルシネーションパターンが記載されていること。"""
+        assert "ありがとうございました" in SYSTEM_PROMPT
+        assert "ご清聴ありがとうございました" in SYSTEM_PROMPT
+        assert "ご視聴ありがとうございました" in SYSTEM_PROMPT
+
+    def test_system_prompt_explains_processing_rules(self):
+        """システムプロンプトに処理ルールが記載されていること。"""
+        # 単独ハルシネーションの処理ルール
+        assert "空文字列を返す" in SYSTEM_PROMPT
+        # 末尾付着の処理ルール
+        assert "その部分を除去" in SYSTEM_PROMPT
+
+    def test_system_prompt_mentions_legitimate_thanks_preservation(self):
+        """システムプロンプトに正当な感謝表現の保持が記載されていること。"""
+        assert "コードレビューありがとう" in SYSTEM_PROMPT
+        assert "修正ありがとうございます" in SYSTEM_PROMPT
+        assert "除去しない" in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_hallucination_examples(self):
+        """システムプロンプトにハルシネーション除去の例が含まれていること。"""
+        # 単独ハルシネーションの例
+        assert '<example type="hallucination" name="ハルシネーション除去（単独）">' in SYSTEM_PROMPT
+        # ご清聴ハルシネーションの例
+        assert '<example type="hallucination" name="ハルシネーション除去（ご清聴）">' in SYSTEM_PROMPT
+        # 末尾付着の例
+        assert '<example type="hallucination" name="ハルシネーション除去（末尾付着）">' in SYSTEM_PROMPT
+
+    def test_system_prompt_contains_legitimate_thanks_examples(self):
+        """システムプロンプトに正当な感謝表現の例が含まれていること。"""
+        assert '<example type="hallucination" name="正当な感謝は維持">' in SYSTEM_PROMPT
+        assert '<example type="hallucination" name="正当な感謝は維持（修正）">' in SYSTEM_PROMPT
+
+    def test_system_prompt_hallucination_role_includes_removal(self):
+        """システムプロンプトの役割にハルシネーション除去が含まれていること。"""
+        assert "Whisperハルシネーションの除去" in SYSTEM_PROMPT
