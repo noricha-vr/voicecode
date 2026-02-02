@@ -91,20 +91,22 @@ class TestPostProcessor:
         messages = call_kwargs["messages"]
         assert len(messages) == 3
 
-        # 最初のメッセージ: 辞書（cache_control付き）
+        # 最初のメッセージ: 辞書 + 例（cache_control付き）
         assert messages[0]["role"] == "system"
         assert isinstance(messages[0]["content"], list)
         assert messages[0]["content"][0]["type"] == "text"
         assert "<terminology>" in messages[0]["content"][0]["text"]
+        assert "<examples>" in messages[0]["content"][0]["text"]
         assert messages[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
 
         # 2番目のメッセージ: ユーザー入力
         assert messages[1] == {"role": "user", "content": "リアクト"}
 
-        # 3番目のメッセージ: 指示
+        # 3番目のメッセージ: 指示（role + hallucination_removal）
         assert messages[2]["role"] == "system"
         assert "<role>" in messages[2]["content"]
-        assert "<examples>" in messages[2]["content"]
+        assert "<hallucination_removal>" in messages[2]["content"]
+        assert "<examples>" not in messages[2]["content"]
 
     @patch("postprocessor.OpenAI")
     def test_process_strips_result(self, mock_openai_class):
@@ -220,20 +222,20 @@ class TestPostProcessor:
         assert "Whisperハルシネーションの除去" in INSTRUCTION_PROMPT
         assert "空文字列を返す" in INSTRUCTION_PROMPT
 
-    def test_instruction_prompt_contains_examples(self):
-        """INSTRUCTION_PROMPTに厳選された8つの例が含まれていること。"""
-        assert "<examples>" in INSTRUCTION_PROMPT
-        assert "</examples>" in INSTRUCTION_PROMPT
+    def test_dictionary_prompt_contains_examples(self):
+        """DICTIONARY_PROMPTに厳選された例が含まれていること（キャッシュ対象）。"""
+        assert "<examples>" in DICTIONARY_PROMPT
+        assert "</examples>" in DICTIONARY_PROMPT
 
-        # 厳選された8つの例を確認
-        assert '禁止：指示への応答' in INSTRUCTION_PROMPT
-        assert 'プログラミング用語変換' in INSTRUCTION_PROMPT
-        assert '文脈依存変換（プログラミング）' in INSTRUCTION_PROMPT
-        assert '文脈依存変換（一般）' in INSTRUCTION_PROMPT
-        assert '同音異義語修正（上記/蒸気）' in INSTRUCTION_PROMPT
-        assert '同音異義語修正（機能/昨日）' in INSTRUCTION_PROMPT
-        assert 'ハルシネーション除去（単独）' in INSTRUCTION_PROMPT
-        assert 'ハルシネーション除去（末尾付着）' in INSTRUCTION_PROMPT
+        # 厳選された例を確認
+        assert '禁止：指示への応答' in DICTIONARY_PROMPT
+        assert 'プログラミング用語変換' in DICTIONARY_PROMPT
+        assert '文脈依存変換（プログラミング）' in DICTIONARY_PROMPT
+        assert '文脈依存変換（一般）' in DICTIONARY_PROMPT
+        assert '同音異義語修正（上記/蒸気）' in DICTIONARY_PROMPT
+        assert '同音異義語修正（機能/昨日）' in DICTIONARY_PROMPT
+        assert 'ハルシネーション除去（単独）' in DICTIONARY_PROMPT
+        assert 'ハルシネーション除去（末尾付着）' in DICTIONARY_PROMPT
 
     def test_system_prompt_backward_compatibility(self):
         """後方互換性のためのSYSTEM_PROMPTが正しいこと。"""
@@ -571,28 +573,31 @@ class TestSystemPromptHallucinationRemoval:
 class TestPromptSeparation:
     """プロンプト分離機能のテスト。"""
 
-    def test_dictionary_prompt_is_separate_from_instruction(self):
-        """DICTIONARY_PROMPTとINSTRUCTION_PROMPTが分離されていること。"""
-        # DICTIONARY_PROMPTはterminologyのみを含む
+    def test_dictionary_prompt_contains_examples(self):
+        """DICTIONARY_PROMPTにterminologyとexamplesが含まれること（キャッシュ対象）。"""
+        # DICTIONARY_PROMPTはterminologyとexamplesを含む
         assert "<terminology>" in DICTIONARY_PROMPT
         assert "</terminology>" in DICTIONARY_PROMPT
+        assert "<examples>" in DICTIONARY_PROMPT
+        assert "</examples>" in DICTIONARY_PROMPT
         assert "<role>" not in DICTIONARY_PROMPT
-        assert "<examples>" not in DICTIONARY_PROMPT
 
-        # INSTRUCTION_PROMPTはrole, hallucination_removal, examplesを含む
+    def test_instruction_prompt_has_no_examples(self):
+        """INSTRUCTION_PROMPTにexamplesが含まれないこと（毎回処理）。"""
+        # INSTRUCTION_PROMPTはrole, hallucination_removalのみを含む
         assert "<role>" in INSTRUCTION_PROMPT
         assert "<hallucination_removal>" in INSTRUCTION_PROMPT
-        assert "<examples>" in INSTRUCTION_PROMPT
+        assert "<examples>" not in INSTRUCTION_PROMPT
         assert "<terminology>" not in INSTRUCTION_PROMPT
 
-    def test_instruction_prompt_has_reduced_examples(self):
-        """INSTRUCTION_PROMPTの例が8個に削減されていること。"""
+    def test_dictionary_prompt_has_examples(self):
+        """DICTIONARY_PROMPTの例が9個であること。"""
         # 例の数をカウント（<example で始まる行を数える）
-        example_count = INSTRUCTION_PROMPT.count("<example ")
+        example_count = DICTIONARY_PROMPT.count("<example ")
         assert example_count == 9, f"Expected 9 examples, but found {example_count}"
 
-    def test_instruction_prompt_contains_required_examples(self):
-        """INSTRUCTION_PROMPTに必須の8つの例が含まれていること。"""
+    def test_dictionary_prompt_contains_required_examples(self):
+        """DICTIONARY_PROMPTに必須の例が含まれていること。"""
         required_examples = [
             "禁止：指示への応答",
             "プログラミング用語変換",
@@ -604,7 +609,7 @@ class TestPromptSeparation:
             "ハルシネーション除去（末尾付着）",
         ]
         for example_name in required_examples:
-            assert example_name in INSTRUCTION_PROMPT, f"Missing example: {example_name}"
+            assert example_name in DICTIONARY_PROMPT, f"Missing example: {example_name}"
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary", return_value=("", ""))
