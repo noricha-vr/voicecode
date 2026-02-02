@@ -7,7 +7,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from openai import APITimeoutError
 
-from postprocessor import PostProcessor, SYSTEM_PROMPT, _load_user_dictionary
+from postprocessor import (
+    PostProcessor,
+    SYSTEM_PROMPT,
+    DICTIONARY_PROMPT,
+    INSTRUCTION_PROMPT,
+    _load_user_dictionary,
+)
 
 
 class TestPostProcessor:
@@ -80,10 +86,25 @@ class TestPostProcessor:
         # 呼び出し引数を検証
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "google/gemini-2.5-flash-lite"
-        assert call_kwargs["messages"] == [
-            {"role": "user", "content": "リアクト"},
-            {"role": "system", "content": SYSTEM_PROMPT},
-        ]
+
+        # 新しいメッセージ構造を検証
+        messages = call_kwargs["messages"]
+        assert len(messages) == 3
+
+        # 最初のメッセージ: 辞書（cache_control付き）
+        assert messages[0]["role"] == "system"
+        assert isinstance(messages[0]["content"], list)
+        assert messages[0]["content"][0]["type"] == "text"
+        assert "<terminology>" in messages[0]["content"][0]["text"]
+        assert messages[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+        # 2番目のメッセージ: ユーザー入力
+        assert messages[1] == {"role": "user", "content": "リアクト"}
+
+        # 3番目のメッセージ: 指示
+        assert messages[2]["role"] == "system"
+        assert "<role>" in messages[2]["content"]
+        assert "<examples>" in messages[2]["content"]
 
     @patch("postprocessor.OpenAI")
     def test_process_strips_result(self, mock_openai_class):
@@ -177,20 +198,52 @@ class TestPostProcessor:
         # エラーログが出力されていることを確認
         assert any("APIタイムアウト" in record.message for record in caplog.records)
 
-    def test_system_prompt_contains_conversion_examples(self):
-        """システムプロンプトに変換例が含まれていること。"""
+    def test_dictionary_prompt_contains_terminology(self):
+        """DICTIONARY_PROMPTに用語辞書が含まれていること。"""
+        assert "<terminology>" in DICTIONARY_PROMPT
+        assert "</terminology>" in DICTIONARY_PROMPT
+        assert 'japanese="リアクト" english="React"' in DICTIONARY_PROMPT
+        assert 'japanese="タイプスクリプト" english="TypeScript"' in DICTIONARY_PROMPT
+        assert 'japanese="ユースステート" english="useState"' in DICTIONARY_PROMPT
+
+    def test_instruction_prompt_contains_role(self):
+        """INSTRUCTION_PROMPTに役割定義が含まれていること。"""
+        assert "<role>" in INSTRUCTION_PROMPT
+        assert "</role>" in INSTRUCTION_PROMPT
+        assert "ペアプログラマーの耳" in INSTRUCTION_PROMPT
+        assert "中継役" in INSTRUCTION_PROMPT
+        assert "応答する立場ではありません" in INSTRUCTION_PROMPT
+
+    def test_instruction_prompt_contains_hallucination_removal(self):
+        """INSTRUCTION_PROMPTにハルシネーション除去が含まれていること。"""
+        assert "<hallucination_removal>" in INSTRUCTION_PROMPT
+        assert "Whisperハルシネーションの除去" in INSTRUCTION_PROMPT
+        assert "空文字列を返す" in INSTRUCTION_PROMPT
+
+    def test_instruction_prompt_contains_examples(self):
+        """INSTRUCTION_PROMPTに厳選された8つの例が含まれていること。"""
+        assert "<examples>" in INSTRUCTION_PROMPT
+        assert "</examples>" in INSTRUCTION_PROMPT
+
+        # 厳選された8つの例を確認
+        assert '禁止：指示への応答' in INSTRUCTION_PROMPT
+        assert 'プログラミング用語変換' in INSTRUCTION_PROMPT
+        assert '文脈依存変換（プログラミング）' in INSTRUCTION_PROMPT
+        assert '文脈依存変換（一般）' in INSTRUCTION_PROMPT
+        assert '同音異義語修正（上記/蒸気）' in INSTRUCTION_PROMPT
+        assert '同音異義語修正（機能/昨日）' in INSTRUCTION_PROMPT
+        assert 'ハルシネーション除去（単独）' in INSTRUCTION_PROMPT
+        assert 'ハルシネーション除去（末尾付着）' in INSTRUCTION_PROMPT
+
+    def test_system_prompt_backward_compatibility(self):
+        """後方互換性のためのSYSTEM_PROMPTが正しいこと。"""
         # terminologyセクションに用語変換定義が含まれていること
         assert 'japanese="リアクト" english="React"' in SYSTEM_PROMPT
         assert 'japanese="タイプスクリプト" english="TypeScript"' in SYSTEM_PROMPT
         assert 'japanese="ユースステート" english="useState"' in SYSTEM_PROMPT
-
-    def test_system_prompt_defines_role_as_transcriber(self):
-        """システムプロンプトに中継役としての役割が定義されていること。"""
-        # ペアプログラマーの耳としての役割が含まれていること
+        # 役割定義が含まれていること
         assert "ペアプログラマーの耳" in SYSTEM_PROMPT
         assert "中継役" in SYSTEM_PROMPT
-        # 指示に応答しないことが明記されていること
-        assert "応答する立場ではありません" in SYSTEM_PROMPT
 
     def test_system_prompt_contains_examples(self):
         """システムプロンプトに入力例と出力例が含まれていること。"""
@@ -218,26 +271,27 @@ class TestPostProcessor:
         processor = PostProcessor(api_key="test_key")
 
         mock_load_dict.assert_called_once()
-        assert "ユーザー辞書（変換）" in processor._system_prompt
-        assert 'japanese="クロードコード" english="Claude Code"' in processor._system_prompt
+        assert "ユーザー辞書（変換）" in processor._dictionary_prompt
+        assert 'japanese="クロードコード" english="Claude Code"' in processor._dictionary_prompt
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary")
     def test_init_without_user_dictionary(self, mock_load_dict, mock_openai_class):
-        """ユーザー辞書がない場合はデフォルトのシステムプロンプトが使用されること。"""
+        """ユーザー辞書がない場合はデフォルトの辞書プロンプトが使用されること。"""
         mock_load_dict.return_value = ("", "")
 
         processor = PostProcessor(api_key="test_key")
 
         mock_load_dict.assert_called_once()
-        assert processor._system_prompt == SYSTEM_PROMPT
+        assert processor._dictionary_prompt == DICTIONARY_PROMPT
+        assert processor._instruction_prompt == INSTRUCTION_PROMPT
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary")
-    def test_process_uses_system_prompt_with_user_dictionary(
+    def test_process_uses_new_message_structure_with_user_dictionary(
         self, mock_load_dict, mock_openai_class
     ):
-        """processメソッドがユーザー辞書を含むシステムプロンプトを使用すること。"""
+        """processメソッドがユーザー辞書を含む新しいメッセージ構造を使用すること。"""
         mock_load_dict.return_value = (
             '\n<category name="ユーザー辞書（変換）">\n<term japanese="テスト" english="Test" context="always"/>\n</category>',
             ""
@@ -253,8 +307,10 @@ class TestPostProcessor:
         processor.process("テスト")
 
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-        # メッセージ順序: user → system
-        assert "ユーザー辞書（変換）" in call_kwargs["messages"][1]["content"]
+        messages = call_kwargs["messages"]
+
+        # 辞書プロンプトにユーザー辞書が含まれていること
+        assert "ユーザー辞書（変換）" in messages[0]["content"][0]["text"]
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary", return_value=("", ""))
@@ -288,8 +344,8 @@ class TestPostProcessor:
         processor = PostProcessor(api_key="test_key")
 
         mock_load_dict.assert_called_once()
-        assert "ユーザー辞書（ヒント）" in processor._system_prompt
-        assert "haiku, sonnet" in processor._system_prompt
+        assert "ユーザー辞書（ヒント）" in processor._dictionary_prompt
+        assert "haiku, sonnet" in processor._dictionary_prompt
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary")
@@ -304,11 +360,11 @@ class TestPostProcessor:
 
         mock_load_dict.assert_called_once()
         # 変換辞書が含まれていること
-        assert "ユーザー辞書（変換）" in processor._system_prompt
-        assert 'japanese="クロード" english="Claude"' in processor._system_prompt
+        assert "ユーザー辞書（変換）" in processor._dictionary_prompt
+        assert 'japanese="クロード" english="Claude"' in processor._dictionary_prompt
         # ヒント辞書が含まれていること
-        assert "ユーザー辞書（ヒント）" in processor._system_prompt
-        assert "Opus" in processor._system_prompt
+        assert "ユーザー辞書（ヒント）" in processor._dictionary_prompt
+        assert "Opus" in processor._dictionary_prompt
 
 
 class TestLoadUserDictionary:
@@ -510,3 +566,89 @@ class TestSystemPromptHallucinationRemoval:
     def test_system_prompt_hallucination_role_includes_removal(self):
         """システムプロンプトの役割にハルシネーション除去が含まれていること。"""
         assert "Whisperハルシネーションの除去" in SYSTEM_PROMPT
+
+
+class TestPromptSeparation:
+    """プロンプト分離機能のテスト。"""
+
+    def test_dictionary_prompt_is_separate_from_instruction(self):
+        """DICTIONARY_PROMPTとINSTRUCTION_PROMPTが分離されていること。"""
+        # DICTIONARY_PROMPTはterminologyのみを含む
+        assert "<terminology>" in DICTIONARY_PROMPT
+        assert "</terminology>" in DICTIONARY_PROMPT
+        assert "<role>" not in DICTIONARY_PROMPT
+        assert "<examples>" not in DICTIONARY_PROMPT
+
+        # INSTRUCTION_PROMPTはrole, hallucination_removal, examplesを含む
+        assert "<role>" in INSTRUCTION_PROMPT
+        assert "<hallucination_removal>" in INSTRUCTION_PROMPT
+        assert "<examples>" in INSTRUCTION_PROMPT
+        assert "<terminology>" not in INSTRUCTION_PROMPT
+
+    def test_instruction_prompt_has_reduced_examples(self):
+        """INSTRUCTION_PROMPTの例が8個に削減されていること。"""
+        # 例の数をカウント（<example で始まる行を数える）
+        example_count = INSTRUCTION_PROMPT.count("<example ")
+        assert example_count == 8, f"Expected 8 examples, but found {example_count}"
+
+    def test_instruction_prompt_contains_required_examples(self):
+        """INSTRUCTION_PROMPTに必須の8つの例が含まれていること。"""
+        required_examples = [
+            "禁止：指示への応答",
+            "プログラミング用語変換",
+            "文脈依存変換（プログラミング）",
+            "文脈依存変換（一般）",
+            "同音異義語修正（上記/蒸気）",
+            "同音異義語修正（機能/昨日）",
+            "ハルシネーション除去（単独）",
+            "ハルシネーション除去（末尾付着）",
+        ]
+        for example_name in required_examples:
+            assert example_name in INSTRUCTION_PROMPT, f"Missing example: {example_name}"
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary", return_value=("", ""))
+    def test_process_sends_cache_control_for_dictionary(self, mock_load_dict, mock_openai_class):
+        """processメソッドが辞書プロンプトにcache_controlを付与すること。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="React"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        processor.process("リアクト")
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        messages = call_kwargs["messages"]
+
+        # 最初のメッセージにcache_controlが付与されていること
+        assert messages[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary", return_value=("", ""))
+    def test_process_message_order(self, mock_load_dict, mock_openai_class):
+        """processメソッドのメッセージ順序が正しいこと（辞書→ユーザー入力→指示）。"""
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="React"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        processor = PostProcessor(api_key="test_key")
+        processor.process("テスト入力")
+
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        messages = call_kwargs["messages"]
+
+        # メッセージ順序を検証
+        assert messages[0]["role"] == "system"  # 辞書
+        assert "<terminology>" in messages[0]["content"][0]["text"]
+
+        assert messages[1]["role"] == "user"  # ユーザー入力
+        assert messages[1]["content"] == "テスト入力"
+
+        assert messages[2]["role"] == "system"  # 指示
+        assert "<role>" in messages[2]["content"]
