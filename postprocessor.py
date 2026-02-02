@@ -3,6 +3,7 @@
 Gemini 2.5 Flash Lite（OpenRouter経由）を使用して音声認識結果を修正する。
 """
 
+import html
 import logging
 import os
 import re
@@ -320,36 +321,68 @@ Whisperは無音部分や録音終了時に、以下のような定型的なハ�
 </instructions>"""
 
 
-def _load_user_dictionary() -> str:
+def _load_user_dictionary() -> tuple[str, str]:
     """ユーザー辞書を読み込んでXML形式で返す。
 
-    ~/.voicecode/dictionary.txt を読み込み、<category>タグで囲んだXML形式で返す。
+    ~/.voicecode/dictionary.txt を読み込み、変換エントリとヒントエントリを
+    それぞれXML形式で返す。
+
+    辞書ファイル形式:
+        - タブを含む行: 変換エントリ（読み<TAB>英語）
+        - タブを含まない行: ヒントエントリ（単語のみ）
+        - 「#」で始まる行: コメント（無視）
 
     Returns:
-        ユーザー辞書のXML文字列。辞書が存在しないか空の場合は空文字列。
+        (変換XML, ヒントXML) のタプル。
+        辞書が存在しないか空の場合は両方とも空文字列。
     """
     dict_path = Path.home() / ".voicecode" / "dictionary.txt"
     if not dict_path.exists():
-        return ""
+        return "", ""
 
-    terms = []
+    conversion_terms = []
+    hint_words = []
+
     with open(dict_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            parts = line.split("\t")
-            if len(parts) != 2:
-                continue
-            japanese, english = parts
-            terms.append(
-                f'<term japanese="{japanese}" english="{english}" context="always"/>'
-            )
 
-    if not terms:
-        return ""
+            if "\t" in line:
+                # タブを含む行は変換エントリ
+                parts = line.split("\t")
+                if len(parts) == 2:
+                    japanese, english = parts
+                    conversion_terms.append(
+                        f'<term japanese="{html.escape(japanese)}" english="{html.escape(english)}" context="always"/>'
+                    )
+            else:
+                # タブを含まない行はヒントエントリ
+                hint_words.append(line)
 
-    return "\n<category name=\"ユーザー辞書\">\n" + "\n".join(terms) + "\n</category>"
+    # 変換XMLを生成
+    conversion_xml = ""
+    if conversion_terms:
+        conversion_xml = (
+            '\n<category name="ユーザー辞書（変換）">\n'
+            + "\n".join(conversion_terms)
+            + "\n</category>"
+        )
+
+    # ヒントXMLを生成
+    hint_xml = ""
+    if hint_words:
+        escaped_hints = ", ".join(html.escape(word) for word in hint_words)
+        hint_xml = (
+            '\n<category name="ユーザー辞書（ヒント）" type="hint">\n'
+            f'<hint>{escaped_hints}</hint>\n'
+            "<note>これらの単語はプログラミング文脈で頻繁に使用されます。"
+            "音声認識結果にこれらの単語が含まれる可能性が高い場合、優先的に採用してください。</note>\n"
+            "</category>"
+        )
+
+    return conversion_xml, hint_xml
 
 
 class PostProcessor:
@@ -383,7 +416,8 @@ class PostProcessor:
         )
 
         # ユーザー辞書を読み込んでシステムプロンプトに追加
-        user_dict = _load_user_dictionary()
+        conversion_xml, hint_xml = _load_user_dictionary()
+        user_dict = conversion_xml + hint_xml
         if user_dict:
             # </terminology> の直前にユーザー辞書を挿入
             self._system_prompt = SYSTEM_PROMPT.replace(
