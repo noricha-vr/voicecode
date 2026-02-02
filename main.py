@@ -631,9 +631,6 @@ class VoiceCodeApp(rumps.App):
             total_time = transcription_time + postprocess_time
             print(f"[Total] {total_time:.2f}s")
 
-            # 修正コマンドを表示
-            print('[Fix] cd /Users/ms25/project/voicecode && claude "/fix-voice  "')
-
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():
                 self._history_manager.save(
