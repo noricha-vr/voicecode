@@ -169,6 +169,12 @@ Whisperは無音部分や録音終了時に、以下のような定型的なハ�
 <explanation>「実装する」があるのでプログラミング文脈、「機能」が正しい</explanation>
 </example>
 
+<example name="同音異義語修正（Issue/EC）">
+<input>GitHubにECを立ててください</input>
+<output>GitHubにIssueを立ててください。</output>
+<explanation>GitHubで「立てる」と組み合わせる場合、「EC」ではなく「Issue」が正しい</explanation>
+</example>
+
 <example type="hallucination" name="ハルシネーション除去（単独）">
 <input>ありがとうございました</input>
 <output></output>

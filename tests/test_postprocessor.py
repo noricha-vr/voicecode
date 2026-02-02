@@ -589,7 +589,7 @@ class TestPromptSeparation:
         """INSTRUCTION_PROMPTの例が8個に削減されていること。"""
         # 例の数をカウント（<example で始まる行を数える）
         example_count = INSTRUCTION_PROMPT.count("<example ")
-        assert example_count == 8, f"Expected 8 examples, but found {example_count}"
+        assert example_count == 9, f"Expected 9 examples, but found {example_count}"
 
     def test_instruction_prompt_contains_required_examples(self):
         """INSTRUCTION_PROMPTに必須の8つの例が含まれていること。"""
