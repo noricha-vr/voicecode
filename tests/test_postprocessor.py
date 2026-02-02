@@ -59,7 +59,7 @@ class TestPostProcessor:
         assert elapsed == 0.0
 
     @patch("postprocessor.OpenAI")
-    @patch("postprocessor._load_user_dictionary", return_value="")
+    @patch("postprocessor._load_user_dictionary", return_value=("", ""))
     def test_process_success(self, mock_load_dict, mock_openai_class):
         """正常に処理できること。"""
         mock_client = MagicMock()
@@ -210,19 +210,22 @@ class TestPostProcessor:
     @patch("postprocessor._load_user_dictionary")
     def test_init_loads_user_dictionary(self, mock_load_dict, mock_openai_class):
         """初期化時にユーザー辞書が読み込まれること。"""
-        mock_load_dict.return_value = '\n<category name="ユーザー辞書">\n<term japanese="クロードコード" english="Claude Code" context="always"/>\n</category>'
+        mock_load_dict.return_value = (
+            '\n<category name="ユーザー辞書（変換）">\n<term japanese="クロードコード" english="Claude Code" context="always"/>\n</category>',
+            ""
+        )
 
         processor = PostProcessor(api_key="test_key")
 
         mock_load_dict.assert_called_once()
-        assert "ユーザー辞書" in processor._system_prompt
+        assert "ユーザー辞書（変換）" in processor._system_prompt
         assert 'japanese="クロードコード" english="Claude Code"' in processor._system_prompt
 
     @patch("postprocessor.OpenAI")
     @patch("postprocessor._load_user_dictionary")
     def test_init_without_user_dictionary(self, mock_load_dict, mock_openai_class):
         """ユーザー辞書がない場合はデフォルトのシステムプロンプトが使用されること。"""
-        mock_load_dict.return_value = ""
+        mock_load_dict.return_value = ("", "")
 
         processor = PostProcessor(api_key="test_key")
 
@@ -235,7 +238,10 @@ class TestPostProcessor:
         self, mock_load_dict, mock_openai_class
     ):
         """processメソッドがユーザー辞書を含むシステムプロンプトを使用すること。"""
-        mock_load_dict.return_value = '\n<category name="ユーザー辞書">\n<term japanese="テスト" english="Test" context="always"/>\n</category>'
+        mock_load_dict.return_value = (
+            '\n<category name="ユーザー辞書（変換）">\n<term japanese="テスト" english="Test" context="always"/>\n</category>',
+            ""
+        )
 
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
@@ -248,10 +254,10 @@ class TestPostProcessor:
 
         call_kwargs = mock_client.chat.completions.create.call_args.kwargs
         # メッセージ順序: user → system
-        assert "ユーザー辞書" in call_kwargs["messages"][1]["content"]
+        assert "ユーザー辞書（変換）" in call_kwargs["messages"][1]["content"]
 
     @patch("postprocessor.OpenAI")
-    @patch("postprocessor._load_user_dictionary", return_value="")
+    @patch("postprocessor._load_user_dictionary", return_value=("", ""))
     def test_process_logs_result_with_gemini_label(self, mock_load_dict, mock_openai_class, caplog):
         """処理結果が[Gemini]ラベルでログ出力されること。"""
         mock_client = MagicMock()
@@ -270,48 +276,118 @@ class TestPostProcessor:
         assert any("[Gemini]" in record.message for record in caplog.records)
         assert any("React" in record.message for record in caplog.records)
 
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary")
+    def test_init_loads_hint_dictionary(self, mock_load_dict, mock_openai_class):
+        """初期化時にヒント辞書が読み込まれること。"""
+        mock_load_dict.return_value = (
+            "",
+            '\n<category name="ユーザー辞書（ヒント）" type="hint">\n<hint>haiku, sonnet</hint>\n<note>これらの単語はプログラミング文脈で頻繁に使用されます。</note>\n</category>'
+        )
+
+        processor = PostProcessor(api_key="test_key")
+
+        mock_load_dict.assert_called_once()
+        assert "ユーザー辞書（ヒント）" in processor._system_prompt
+        assert "haiku, sonnet" in processor._system_prompt
+
+    @patch("postprocessor.OpenAI")
+    @patch("postprocessor._load_user_dictionary")
+    def test_init_loads_both_conversion_and_hint(self, mock_load_dict, mock_openai_class):
+        """初期化時に変換辞書とヒント辞書が両方読み込まれること。"""
+        mock_load_dict.return_value = (
+            '\n<category name="ユーザー辞書（変換）">\n<term japanese="クロード" english="Claude" context="always"/>\n</category>',
+            '\n<category name="ユーザー辞書（ヒント）" type="hint">\n<hint>Opus</hint>\n<note>これらの単語はプログラミング文脈で頻繁に使用されます。</note>\n</category>'
+        )
+
+        processor = PostProcessor(api_key="test_key")
+
+        mock_load_dict.assert_called_once()
+        # 変換辞書が含まれていること
+        assert "ユーザー辞書（変換）" in processor._system_prompt
+        assert 'japanese="クロード" english="Claude"' in processor._system_prompt
+        # ヒント辞書が含まれていること
+        assert "ユーザー辞書（ヒント）" in processor._system_prompt
+        assert "Opus" in processor._system_prompt
+
+
 class TestLoadUserDictionary:
     """_load_user_dictionary関数のテスト。"""
 
-    def test_returns_empty_when_file_not_exists(self, tmp_path):
-        """辞書ファイルが存在しない場合に空文字列を返すこと。"""
+    def test_returns_empty_tuple_when_file_not_exists(self, tmp_path):
+        """辞書ファイルが存在しない場合に空のタプルを返すこと。"""
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert result == ""
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert hint_xml == ""
 
-    def test_returns_empty_when_file_is_empty(self, tmp_path):
-        """辞書ファイルが空の場合に空文字列を返すこと。"""
+    def test_returns_empty_tuple_when_file_is_empty(self, tmp_path):
+        """辞書ファイルが空の場合に空のタプルを返すこと。"""
         dict_dir = tmp_path / ".voicecode"
         dict_dir.mkdir()
         dict_file = dict_dir / "dictionary.txt"
         dict_file.write_text("")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert result == ""
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert hint_xml == ""
 
-    def test_returns_empty_when_only_comments(self, tmp_path):
-        """コメント行のみの場合に空文字列を返すこと。"""
+    def test_returns_empty_tuple_when_only_comments(self, tmp_path):
+        """コメント行のみの場合に空のタプルを返すこと。"""
         dict_dir = tmp_path / ".voicecode"
         dict_dir.mkdir()
         dict_file = dict_dir / "dictionary.txt"
         dict_file.write_text("# コメント行\n# もう一つのコメント\n")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert result == ""
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert hint_xml == ""
 
-    def test_parses_valid_entries(self, tmp_path):
-        """有効なエントリを正しくパースすること。"""
+    def test_parses_conversion_entries(self, tmp_path):
+        """タブ区切りの変換エントリを正しくパースすること。"""
         dict_dir = tmp_path / ".voicecode"
         dict_dir.mkdir()
         dict_file = dict_dir / "dictionary.txt"
         dict_file.write_text("クロードコード\tClaude Code\n")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert 'category name="ユーザー辞書"' in result
-            assert 'japanese="クロードコード" english="Claude Code"' in result
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert 'category name="ユーザー辞書（変換）"' in conversion_xml
+            assert 'japanese="クロードコード" english="Claude Code"' in conversion_xml
+            assert hint_xml == ""
+
+    def test_parses_hint_entries(self, tmp_path):
+        """タブなしの行をヒントエントリとして認識すること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("haiku\nsonnet\nOpus\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert 'category name="ユーザー辞書（ヒント）" type="hint"' in hint_xml
+            assert "<hint>haiku, sonnet, Opus</hint>" in hint_xml
+            assert "これらの単語はプログラミング文脈で頻繁に使用されます" in hint_xml
+
+    def test_parses_mixed_entries(self, tmp_path):
+        """変換エントリとヒントエントリの混在を正しくパースすること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("クロードコード\tClaude Code\nhaiku\nスベルトキット\tSvelteKit\nsonnet\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            conversion_xml, hint_xml = _load_user_dictionary()
+            # 変換エントリの検証
+            assert 'category name="ユーザー辞書（変換）"' in conversion_xml
+            assert 'japanese="クロードコード" english="Claude Code"' in conversion_xml
+            assert 'japanese="スベルトキット" english="SvelteKit"' in conversion_xml
+            # ヒントエントリの検証
+            assert 'category name="ユーザー辞書（ヒント）" type="hint"' in hint_xml
+            assert "<hint>haiku, sonnet</hint>" in hint_xml
 
     def test_parses_multiple_readings(self, tmp_path):
         """複数の読み（カンマ区切り）を正しくパースすること。"""
@@ -321,8 +397,8 @@ class TestLoadUserDictionary:
         dict_file.write_text("ネクスト,ネクストJS\tNext.js\n")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert 'japanese="ネクスト,ネクストJS" english="Next.js"' in result
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert 'japanese="ネクスト,ネクストJS" english="Next.js"' in conversion_xml
 
     def test_ignores_comments_and_empty_lines(self, tmp_path):
         """コメント行と空行を無視すること。"""
@@ -332,23 +408,62 @@ class TestLoadUserDictionary:
         dict_file.write_text("# コメント\nクロードコード\tClaude Code\n\n# もう一つ\nスベルトキット\tSvelteKit\n")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert 'japanese="クロードコード" english="Claude Code"' in result
-            assert 'japanese="スベルトキット" english="SvelteKit"' in result
-            assert "# コメント" not in result
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert 'japanese="クロードコード" english="Claude Code"' in conversion_xml
+            assert 'japanese="スベルトキット" english="SvelteKit"' in conversion_xml
+            assert "# コメント" not in conversion_xml
+            assert hint_xml == ""
 
-    def test_ignores_invalid_lines(self, tmp_path):
-        """不正な形式の行を無視すること。"""
+    def test_hint_entries_with_comments(self, tmp_path):
+        """コメント行と空行がある場合もヒントエントリを正しくパースすること。"""
         dict_dir = tmp_path / ".voicecode"
         dict_dir.mkdir()
         dict_file = dict_dir / "dictionary.txt"
-        dict_file.write_text("不正な行\nクロードコード\tClaude Code\nタブなし行\n")
+        dict_file.write_text("# ヒント単語\nhaiku\n\n# モデル名\nsonnet\nOpus\n")
 
         with patch.object(Path, "home", return_value=tmp_path):
-            result = _load_user_dictionary()
-            assert 'japanese="クロードコード" english="Claude Code"' in result
-            assert "不正な行" not in result
-            assert "タブなし行" not in result
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert "<hint>haiku, sonnet, Opus</hint>" in hint_xml
+            assert "# ヒント単語" not in hint_xml
+
+    def test_hint_only_file(self, tmp_path):
+        """ヒントエントリのみのファイルを正しく処理すること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("Claude\nGPT\nGemini\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert conversion_xml == ""
+            assert 'category name="ユーザー辞書（ヒント）" type="hint"' in hint_xml
+            assert "<hint>Claude, GPT, Gemini</hint>" in hint_xml
+            assert "優先的に採用してください" in hint_xml
+
+    def test_escapes_special_characters_in_hint(self, tmp_path):
+        """ヒント語の特殊文字がエスケープされること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text("AT&T\nC<->C\n")
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert "AT&amp;T" in hint_xml
+            assert "C&lt;-&gt;C" in hint_xml
+
+    def test_escapes_special_characters_in_conversion(self, tmp_path):
+        """変換エントリの特殊文字がエスケープされること。"""
+        dict_dir = tmp_path / ".voicecode"
+        dict_dir.mkdir()
+        dict_file = dict_dir / "dictionary.txt"
+        dict_file.write_text('アンド\tA&B\n<タグ>\t<tag>\n')
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            conversion_xml, hint_xml = _load_user_dictionary()
+            assert "A&amp;B" in conversion_xml
+            assert "&lt;tag&gt;" in conversion_xml
 
 
 class TestSystemPromptHallucinationRemoval:
