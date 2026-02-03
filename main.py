@@ -588,11 +588,21 @@ class VoiceCodeApp(rumps.App):
         original_clipboard: str | None = None
         transcribed_text: str = ""
         processed_text: str = ""
+
+        # 処理時間計測用
+        total_start = time.time()
+        stop_time: float = 0.0
         transcription_time: float = 0.0
         postprocess_time: float = 0.0
+        paste_time: float = 0.0
 
         try:
+            # 録音停止（WAVファイル書き込み含む）
+            stop_start = time.time()
             audio_path = self._recorder.stop()
+            stop_time = time.time() - stop_start
+            logger.info(f"[Stop] Recording saved ({stop_time:.2f}s)")
+
             print("\n" + "-" * 50)
             print("Processing...")
             print("-" * 50)
@@ -616,20 +626,19 @@ class VoiceCodeApp(rumps.App):
                 except Exception:
                     pass
 
-            # クリップボードにコピー
+            # クリップボード + 貼り付け
+            paste_start = time.time()
             pyperclip.copy(processed_text)
-
-            # 少し待機してから貼り付け
             time.sleep(0.2)
-
-            # Cmd+V で貼り付け（pynputを使用）
             controller = keyboard.Controller()
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
+            paste_time = time.time() - paste_start
+            logger.info(f"[Paste] Clipboard + paste ({paste_time:.2f}s)")
 
             # 合計時間を表示
-            total_time = transcription_time + postprocess_time
-            print(f"[Total] {total_time:.2f}s")
+            total_time = time.time() - total_start
+            print(f"[Total] {total_time:.2f}s (stop: {stop_time:.2f}s, whisper: {transcription_time:.2f}s, gemini: {postprocess_time:.2f}s, paste: {paste_time:.2f}s)")
 
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():

@@ -192,28 +192,18 @@ uv run python main.py
 | 処理完了 | Glass |
 | エラー | Basso |
 
-## バックグラウンドサービスとして実行
+## バックグラウンドで実行
 
-Mac起動時に自動でvoicecodeを常駐させる場合:
+`-d` オプションでバックグラウンド起動できます。
 
-### 1. plistをコピー
 ```bash
-cp com.voicecode.plist ~/Library/LaunchAgents/
+uv run python main.py -d
 ```
 
-### 2. サービスを開始
-```bash
-launchctl load ~/Library/LaunchAgents/com.voicecode.plist
-```
+ログは `~/.voicecode/voicecode.log` に出力されます。
 
-### 3. サービスを停止
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.voicecode.plist
-```
-
-### ログ確認
-```bash
-tail -f /tmp/voicecode.log
+tail -f ~/.voicecode/voicecode.log
 ```
 
 ## アーキテクチャ
