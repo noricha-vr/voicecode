@@ -23,8 +23,7 @@ from main import (
 # VoiceCodeApp のテストで常に必要なモック
 # API キーとマイク権限チェックをモック
 VOICECODE_APP_PATCHES = {
-    "GROQ_API_KEY": "test_groq_key",
-    "OPENROUTER_API_KEY": "test_openrouter_key",
+    "GOOGLE_API_KEY": "test_google_key",
     "HOTKEY": "f15",
 }
 
