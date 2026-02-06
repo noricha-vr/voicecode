@@ -22,6 +22,18 @@
 - なし（重大なセキュリティリスクは検出されず）
 
 ### P2: 中（品質改善）
+- [ ] **未使用依存の整理** - Gemini単段化後に `groq` / `openai` の依存が不要かを再確認して削除
+  - ファイル: `pyproject.toml`, `uv.lock`
+  - 理由: 互換期間中の暫定依存が残ると保守コストが上がる
+
+- [ ] **Gemini SDK移行** - `google.generativeai` から `google.genai` へ移行
+  - ファイル: `transcriber.py`, `scripts/test_gemini_audio.py`, `pyproject.toml`
+  - 理由: 現行SDKで FutureWarning（サポート終了）が出るため
+
+- [ ] **pytest収集範囲を固定** - `testpaths = ["tests"]` で `scripts/test_*.py` を誤収集しない
+  - ファイル: `pyproject.toml`
+  - 理由: 全体テストで実行用スクリプトが収集されるとCI/ローカル検証が不安定になる
+
 - [ ] **Linting設定を追加** - pyproject.toml に ruff/black 設定を追加
   - ファイル: `pyproject.toml`
   - 理由: 自動フォーマット・品質チェック未配置
@@ -35,6 +47,10 @@
   - 理由: カバレッジ測定が未設定
 
 ### P3: 低（将来的）
+- [ ] **postprocessor 互換レイヤの削除** - Gemini単段化が安定したら `main.py` から `PostProcessor` 呼び出しを撤去
+  - ファイル: `main.py`, `postprocessor.py`, `tests/test_main.py`
+  - 理由: 現在は移行互換のためパススルー実装が残っている
+
 - [ ] **ユーザー辞書のXMLエスケープ追加** - postprocessor.py:280-290
   - 理由: XMLタグを含む辞書で問題が発生する可能性（軽微）
 

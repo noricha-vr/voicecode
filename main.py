@@ -2,7 +2,7 @@
 """音声入力ツールのエントリポイント。
 
 設定されたホットキー（デフォルト: F15）で録音開始/停止をトグル。
-録音停止後、文字起こし→LLM後処理→クリップボードにコピー→貼り付けを実行。
+録音停止後、文字起こし→（互換レイヤ）→クリップボードにコピー→貼り付けを実行。
 メニューバーアプリとして動作し、状態をアイコンで表示する。
 """
 
@@ -104,8 +104,7 @@ def _ensure_api_keys(env_path: Path) -> None:
         SystemExit: ユーザーが API キーを入力しなかった場合
     """
     keys_to_check = [
-        ("GROQ_API_KEY", "Groq API キー"),
-        ("OPENROUTER_API_KEY", "OpenRouter API キー"),
+        ("GOOGLE_API_KEY", "Google API キー"),
     ]
 
     updated = False
@@ -638,7 +637,7 @@ class VoiceCodeApp(rumps.App):
 
             # 合計時間を表示
             total_time = time.time() - total_start
-            print(f"[Total] {total_time:.2f}s (stop: {stop_time:.2f}s, whisper: {transcription_time:.2f}s, gemini: {postprocess_time:.2f}s, paste: {paste_time:.2f}s)")
+            print(f"[Total] {total_time:.2f}s (stop: {stop_time:.2f}s, gemini: {transcription_time:.2f}s, finalize: {postprocess_time:.2f}s, paste: {paste_time:.2f}s)")
 
             # 履歴を保存（貼り付け完了後、一時ファイル削除前）
             if audio_path and audio_path.exists():
