@@ -30,9 +30,13 @@
   - ファイル: `transcriber.py`, `scripts/test_gemini_audio.py`, `pyproject.toml`
   - 理由: 現行SDKで FutureWarning（サポート終了）が出るため
 
-- [ ] **pytest収集範囲を固定** - `testpaths = ["tests"]` で `scripts/test_*.py` を誤収集しない
+- [x] **pytest収集範囲を固定** - `testpaths = ["tests"]` で `scripts/test_*.py` を誤収集しない
   - ファイル: `pyproject.toml`
   - 理由: 全体テストで実行用スクリプトが収集されるとCI/ローカル検証が不安定になる
+
+- [ ] **ログローテーション導入** - `~/.voicecode/voicecode.log` の肥大化を防ぐ
+  - ファイル: `main.py`（logging設定）, 運用ドキュメント
+  - 理由: 長期運用で数GBまで増加し、ディスク圧迫や調査性低下の原因になる
 
 - [ ] **Linting設定を追加** - pyproject.toml に ruff/black 設定を追加
   - ファイル: `pyproject.toml`
