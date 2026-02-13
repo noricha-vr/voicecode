@@ -53,4 +53,5 @@ include = [
   "settings.py",
   "overlay.py",
   "history.py",
+  "assets/*.png",
 ]
