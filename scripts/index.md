@@ -10,3 +10,4 @@
 | `sign_and_notarize.sh` | コード署名と公証スクリプト（Apple Developer アカウント要） |
 | `generate_formula.sh` | Homebrew Formula の SHA256 計算ヘルパー |
 | `generate_icons.py` | メニューバーアイコン PNG 生成スクリプト |
+| `test_gemini_audio.py` | 履歴音声をGemini APIへ再送して動作確認するスクリプト |

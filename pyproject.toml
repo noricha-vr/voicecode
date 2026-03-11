@@ -1,12 +1,12 @@
 [project]
 name = "voicecode"
 version = "0.1.0"
-description = "macOS用の音声入力ツール。ホットキーで録音→文字起こし→LLM後処理→貼り付けを自動化"
+description = "macOS用の音声入力ツール。ホットキーで録音→Gemini文字起こし→貼り付けを自動化"
 readme = "README.md"
 requires-python = ">=3.13"
 license = {text = "MIT"}
 authors = [{name = "noricha-vr"}]
-keywords = ["voice", "input", "speech-to-text", "macos", "programming", "transcription", "whisper"]
+keywords = ["voice", "input", "speech-to-text", "macos", "programming", "transcription", "gemini"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -24,6 +24,7 @@ dependencies = [
     "pyperclip>=1.8.2",
     "python-dotenv>=1.0.0",
     "rumps>=0.4.0",
+    "google-generativeai>=0.8.6",
 ]
 
 [project.urls]
@@ -42,6 +43,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.hatch.build]
 # フラットレイアウト（src/ なし）のため、含めるモジュールを明示
