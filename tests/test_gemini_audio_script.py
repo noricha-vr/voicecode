@@ -48,6 +48,52 @@ def test_find_history_audio_files_returns_newest_first(tmp_path):
     assert script.find_history_audio_files(tmp_path) == [new_file, old_file]
 
 
+@pytest.mark.parametrize('index,expected_name', [(0, 'new.wav'), (1, 'old.wav')])
+def test_main_selects_history_audio_without_explicit_file(monkeypatch, tmp_path, index, expected_name):
+    _create_wav(tmp_path / 'old.wav', 100)
+    _create_wav(tmp_path / 'new.wav', 200)
+    monkeypatch.setenv('TEST_GEMINI_KEY', 'test-api-key')
+    selected = []
+
+    def fake_transcription(audio_path, model, api_key):
+        selected.append(audio_path.name)
+        return '合成結果', 0.1
+
+    monkeypatch.setattr(script, 'run_transcription', fake_transcription)
+    args = ['--model', 'gemini-test-fixed', '--history-dir', str(tmp_path),
+            '--api-key-env', 'TEST_GEMINI_KEY']
+    if index:
+        args.extend(['--history-index', str(index)])
+    assert script.main(args) == 0
+    assert selected == [expected_name]
+
+
+@pytest.mark.parametrize('index,has_audio', [(-1, True), (1, True), (0, False)])
+def test_invalid_history_does_not_call_api(monkeypatch, tmp_path, index, has_audio):
+    if has_audio:
+        _create_wav(tmp_path / 'synthetic.wav')
+    monkeypatch.setenv('TEST_GEMINI_KEY', 'test-api-key')
+    monkeypatch.setattr(script, 'run_transcription', lambda *args, **kwargs: pytest.fail('API must not run'))
+    assert script.main(['--model', 'gemini-test-fixed', '--history-dir', str(tmp_path),
+                        '--history-index', str(index), '--api-key-env', 'TEST_GEMINI_KEY']) == 1
+
+
+def test_missing_model_stops_before_reading_audio_or_http(monkeypatch, tmp_path):
+    monkeypatch.setattr(script, 'run_transcription', lambda *args, **kwargs: pytest.fail('HTTP must not run'))
+    with pytest.raises(SystemExit) as exc:
+        script.main(['--history-dir', str(tmp_path)])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize('model', ['', '../other', 'gemini?key=value'])
+def test_invalid_model_stops_before_http(tmp_path, model):
+    path = tmp_path / 'synthetic.wav'
+    _create_wav(path)
+    with pytest.raises(ValueError, match='モデル名'):
+        script.run_transcription(path, model=model, api_key='test-api-key',
+                                 opener=lambda *args, **kwargs: pytest.fail('HTTP must not run'))
+
+
 def test_resolve_audio_path_accepts_matching_history_json(tmp_path):
     wav_path = tmp_path / "sample.wav"
     _create_wav(wav_path)
