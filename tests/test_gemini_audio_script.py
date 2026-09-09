@@ -1,10 +1,13 @@
-"""scripts/test_gemini_audio.py のテスト。"""
+"""過去音声のGemini診断スクリプトを検証する。"""
 
 from __future__ import annotations
 
+import base64
 import importlib.util
+import io
 import json
 import os
+import wave
 from pathlib import Path
 
 import pytest
@@ -22,9 +25,18 @@ def _load_script_module():
 script = _load_script_module()
 
 
-def _create_wav(path: Path, mtime: int) -> None:
-    path.write_bytes(b"wav")
+def _create_wav(path: Path, mtime: int = 100) -> None:
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16_000)
+        wav_file.writeframes(b"\x00\x00" * 16)
     os.utime(path, (mtime, mtime))
+
+
+def _response(text: str) -> io.BytesIO:
+    payload = {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+    return io.BytesIO(json.dumps(payload).encode("utf-8"))
 
 
 def test_find_history_audio_files_returns_newest_first(tmp_path):
@@ -33,85 +45,115 @@ def test_find_history_audio_files_returns_newest_first(tmp_path):
     _create_wav(old_file, 100)
     _create_wav(new_file, 200)
 
-    result = script.find_history_audio_files(tmp_path)
-
-    assert result == [new_file, old_file]
+    assert script.find_history_audio_files(tmp_path) == [new_file, old_file]
 
 
-def test_select_history_audio_raises_on_out_of_range(tmp_path):
-    _create_wav(tmp_path / "only.wav", 100)
-
-    with pytest.raises(IndexError, match="範囲外"):
-        script.select_history_audio(tmp_path, history_index=1)
-
-
-def test_resolve_audio_path_accepts_json_path(tmp_path):
+def test_resolve_audio_path_accepts_matching_history_json(tmp_path):
     wav_path = tmp_path / "sample.wav"
+    _create_wav(wav_path)
     json_path = tmp_path / "sample.json"
-    _create_wav(wav_path, 100)
     json_path.write_text("{}", encoding="utf-8")
 
-    resolved = script.resolve_audio_path(json_path, tmp_path, history_index=0)
-
-    assert resolved == wav_path
+    assert script.resolve_audio_path(json_path, tmp_path, 0) == wav_path
 
 
-def test_load_expected_transcription_prefers_processed_text(tmp_path):
-    wav_path = tmp_path / "sample.wav"
-    _create_wav(wav_path, 100)
-    wav_path.with_suffix(".json").write_text(
-        json.dumps(
-            {
-                "raw_transcription": "らう",
-                "processed_text": "プロセス済み",
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+def test_run_transcription_uses_only_explicit_model_and_mock_http(tmp_path):
+    wav_path = tmp_path / "synthetic.wav"
+    _create_wav(wav_path)
+    calls = []
+
+    def fake_open(request, timeout):
+        calls.append((request, timeout))
+        return _response("合成音声の結果")
+
+    text, _elapsed = script.run_transcription(
+        wav_path,
+        model="gemini-test-fixed",
+        api_key="test-api-key",
+        opener=fake_open,
     )
 
-    assert script.load_expected_transcription(wav_path) == "プロセス済み"
+    request, timeout = calls[0]
+    request_payload = json.loads(request.data)
+    inline_audio = request_payload["contents"][0]["parts"][1]["inlineData"]["data"]
+    assert text == "合成音声の結果"
+    assert len(calls) == 1
+    assert "/models/gemini-test-fixed:generateContent" in request.full_url
+    assert request.headers["X-goog-api-key"] == "test-api-key"
+    assert timeout == script.DEFAULT_TIMEOUT_SECONDS
+    assert base64.b64decode(inline_audio) == wav_path.read_bytes()
 
 
-def test_main_success(monkeypatch, tmp_path, capsys):
-    wav_path = tmp_path / "sample.wav"
-    _create_wav(wav_path, 100)
-    wav_path.with_suffix(".json").write_text(
-        json.dumps({"processed_text": "成功テキスト"}, ensure_ascii=False),
-        encoding="utf-8",
+def test_run_transcription_does_not_retry_or_switch_models(tmp_path):
+    wav_path = tmp_path / "synthetic.wav"
+    _create_wav(wav_path)
+    calls = []
+
+    def failing_open(request, timeout):
+        calls.append((request, timeout))
+        raise RuntimeError("synthetic failure")
+
+    with pytest.raises(RuntimeError, match="synthetic failure"):
+        script.run_transcription(
+            wav_path,
+            model="gemini-test-fixed",
+            api_key="test-api-key",
+            opener=failing_open,
+        )
+    assert len(calls) == 1
+
+
+def test_main_requires_api_key_without_calling_http(monkeypatch, tmp_path, capsys):
+    wav_path = tmp_path / "synthetic.wav"
+    _create_wav(wav_path)
+    monkeypatch.delenv("MISSING_GEMINI_KEY", raising=False)
+    monkeypatch.setattr(
+        script,
+        "run_transcription",
+        lambda *args, **kwargs: pytest.fail("HTTP呼び出しは実行されない"),
     )
-
-    monkeypatch.setattr(script, "run_transcription", lambda audio_path, api_key: ("成功テキスト", 0.42))
 
     result = script.main(
         [
+            "--model",
+            "gemini-test-fixed",
             "--audio",
             str(wav_path),
-            "--env-file",
-            str(tmp_path / "missing.env"),
+            "--api-key-env",
+            "MISSING_GEMINI_KEY",
         ]
     )
 
-    captured = capsys.readouterr()
-    assert result == 0
-    assert "[OK]" in captured.out
-
-
-def test_main_fails_on_empty_transcription(monkeypatch, tmp_path, capsys):
-    wav_path = tmp_path / "sample.wav"
-    _create_wav(wav_path, 100)
-
-    monkeypatch.setattr(script, "run_transcription", lambda audio_path, api_key: ("", 0.42))
-
-    result = script.main(
-        [
-            "--audio",
-            str(wav_path),
-            "--env-file",
-            str(tmp_path / "missing.env"),
-        ]
-    )
-
-    captured = capsys.readouterr()
     assert result == 1
-    assert "空でした" in captured.err
+    assert "MISSING_GEMINI_KEY" in capsys.readouterr().err
+
+
+def test_main_reports_history_comparison(monkeypatch, tmp_path, capsys):
+    wav_path = tmp_path / "synthetic.wav"
+    _create_wav(wav_path)
+    wav_path.with_suffix(".json").write_text(
+        json.dumps({"processed_text": "期待結果"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TEST_GEMINI_KEY", "test-api-key")
+    monkeypatch.setattr(
+        script,
+        "run_transcription",
+        lambda audio_path, model, api_key: ("期待結果", 0.25),
+    )
+
+    result = script.main(
+        [
+            "--model",
+            "gemini-test-fixed",
+            "--audio",
+            str(wav_path),
+            "--api-key-env",
+            "TEST_GEMINI_KEY",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "履歴比較: 一致" in output
+    assert "[OK]" in output
