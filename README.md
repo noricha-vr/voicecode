@@ -38,8 +38,8 @@ Claude Code や Cursor などの AI コーディングツールに、音声で�
 
 - **低コスト**: 月額約$1（約150円）で使い放題（1日100回×30日の場合）
 - **ワンキー操作**: F15（カスタマイズ可能）で録音開始/停止をトグル
-- **高速文字起こし**: Gemini Flash に音声を直接入力して高精度に文字起こし
-- **プログラミング用語の自動補正**: Gemini のプロンプトとユーザー辞書で技術用語を補正
+- **高速文字起こし**: Groq Whisper (whisper-large-v3-turbo) による高精度な音声認識
+- **プログラミング用語の自動補正**: Gemini (OpenRouter) でカタカナを英語表記に変換
 - **シームレスな入力**: 自動でクリップボードにコピー&貼り付け
 - **メニューバー常駐**: 状態アイコン（■/●/↻）で録音状態を確認
 - **効果音フィードバック**: 録音開始・停止・完了時に効果音でお知らせ
@@ -48,7 +48,8 @@ Claude Code や Cursor などの AI コーディングツールに、音声で�
 
 | サービス | 用途 | 料金 |
 |----------|------|------|
-| Gemini Flash（自動選択） | 文字起こし + 用語補正 | Google の料金体系に準拠 |
+| Groq Whisper | 文字起こし | 無料 |
+| Gemini 2.5 Flash Lite (OpenRouter) | 後処理 | $0.10/100万トークン（入力） |
 
 ### 月額目安
 
@@ -119,14 +120,14 @@ uv sync
 ```bash
 mkdir -p ~/.voicecode
 cat > ~/.voicecode/.env << EOF
-GOOGLE_API_KEY=your_google_api_key
-# 任意: 利用モデルを固定したい場合
-# VOICECODE_GEMINI_MODEL=gemini-2.5-flash
+GROQ_API_KEY=your_groq_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 EOF
 ```
 
 API キーの取得先:
-- Google AI Studio: https://aistudio.google.com/apikey
+- Groq: https://console.groq.com/keys
+- OpenRouter: https://openrouter.ai/keys
 - 詳細な取得手順: [docs/api-setup.md](docs/api-setup.md)
 
 ホットキーはメニューバーの「ホットキー設定...」から変更できます。設定は `~/.voicecode/settings.json` に保存されます。
@@ -168,7 +169,7 @@ uv run python main.py
 1. **録音開始**: F15 を押す（デフォルト、メニューバーから変更可能）
 2. **話す**: マイクに向かって話す
 3. **録音停止**: F15 を再度押す
-4. **自動処理**: 文字起こし（Gemini）→ 貼り付けが実行される
+4. **自動処理**: 文字起こし → 後処理 → 貼り付けが実行される
 
 終了するには Ctrl+C を押す。メニューバーから「終了」を選択しても停止できる。
 
@@ -180,7 +181,7 @@ uv run python main.py
 |----------|------|
 | ■ | 待機中（録音可能） |
 | ● | 録音中 |
-| ↻ | 処理中（文字起こし） |
+| ↻ | 処理中（文字起こし・後処理） |
 
 ## 効果音
 
@@ -209,19 +210,20 @@ tail -f ~/.voicecode/voicecode.log
 
 ```
 ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌──────────┐
-│  録音   │ -> │ Gemini  │ -> │ 貼り付け │
-│ (音声) │    │ (文字)  │    │          │
-└─────────┘    └─────────┘    └──────────┘
-     |              |              |
-  pynput       Google API     pyautogui
- sounddevice                  pyperclip
+│  録音   │ -> │ Whisper │ -> │  Gemini │ -> │ 貼り付け │
+│ (音声) │    │ (文字)  │    │ (修正)  │    │          │
+└─────────┘    └─────────┘    └─────────┘    └──────────┘
+     |              |              |              |
+  pynput      Groq API      OpenRouter      pyautogui
+ sounddevice                   API          pyperclip
 ```
 
 ### 処理フロー
 
 1. **録音** (recorder.py): pynput でホットキーを監視、sounddevice で音声を録音
-2. **文字起こし** (transcriber.py): 利用可能な Gemini Flash モデルを自動選択して音声を直接テキスト化
-3. **貼り付け** (main.py): pyperclip でクリップボードにコピー、pyautogui で Cmd+V
+2. **文字起こし** (transcriber.py): Groq Whisper API で音声をテキストに変換
+3. **後処理** (postprocessor.py): Gemini 2.5 Flash Lite (OpenRouter) でプログラミング用語を補正
+4. **貼り付け** (main.py): pyperclip でクリップボードにコピー、pyautogui で Cmd+V
 
 ## ファイル構成
 
@@ -229,8 +231,8 @@ tail -f ~/.voicecode/voicecode.log
 voicecode/
 ├── main.py           # エントリポイント、キーボード監視と統合処理
 ├── recorder.py       # 音声録音モジュール
-├── transcriber.py    # Gemini Flash による文字起こし（モデル自動選択）
-├── postprocessor.py  # 互換用の後処理レイヤ（現在はパススルー）
+├── transcriber.py    # Groq Whisper による文字起こし
+├── postprocessor.py  # Gemini による後処理
 ├── settings.py       # 設定管理
 ├── pyproject.toml    # プロジェクト設定・依存関係
 ├── .env.example      # 環境変数テンプレート
